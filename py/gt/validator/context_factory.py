@@ -16,10 +16,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class ContextFactory:
     """Singleton factory that selects a :class:`ValidationContext` based on the current host.
-    
+
     The factory maintains a registry of available context classes and returns
     the appropriate one for the running environment.  New contexts can be added
     by registering them with ``register()``.
@@ -114,7 +113,6 @@ class ContextFactory:
         )
         return FilesystemContext()
 
-
 # Pre-register the built-in contexts so get_context() works immediately.
 def _register_default_contexts(factory: ContextFactory) -> None:
     """Register the default context types with the factory."""
@@ -133,7 +131,6 @@ def _register_default_contexts(factory: ContextFactory) -> None:
     factory.register("HOUDINI", HoudiniContext)
     factory.register("BLENDER", BlenderContext)
     factory.register("KRITA", KritaContext)
-
 
 # Register defaults when module is imported.
 _factory = ContextFactory.get_instance()

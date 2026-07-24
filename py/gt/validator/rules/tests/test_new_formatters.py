@@ -2,13 +2,10 @@
 
 import json
 import unittest
-from datetime import datetime, timezone
-from unittest.mock import patch
 
-from gt.runtime import HostType
 from gt.validator.reporting.formatters import JUnitXMLFormatter, SARIFFormatter
-from gt.validator.rules.base import Severity, ValidationResult
 from gt.validator.reporting.models import ValidationReport
+from gt.validator.rules.base import Severity, ValidationResult
 
 
 def _make_report() -> ValidationReport:

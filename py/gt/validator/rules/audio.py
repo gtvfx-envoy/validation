@@ -15,10 +15,9 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
+from ..context.filesystem import FilesystemContext
 from ..registry import registry
 from .base import AbstractRule, Severity, ValidationResult
-
-from ..context.filesystem import FilesystemContext
 
 if TYPE_CHECKING:
     from ..config import Config
@@ -69,7 +68,14 @@ class AudioFileSizeRule(AbstractRule):
     severity = Severity.ERROR
     context = None  # type: ignore[assignment]  — no host restriction
 
-    def __init__(self, config: "Config", validation_context=None) -> None:
+    def __init__(self, config: Config, validation_context=None) -> None:
+        """Initialize the AudioFileSizeRule.
+
+        Args:
+            config (Config): Configuration instance with audio file size limits.
+            validation_context: Context for asset metadata collection. Defaults to FilesystemContext.
+
+        """
         super().__init__(config)
         self._validation_context = validation_context or FilesystemContext()
 
@@ -120,8 +126,8 @@ class AudioFileSizeRule(AbstractRule):
                 f"{max_size_mb} MB for {os.path.splitext(asset_path)[1]}."
             ),
             fix_hint=(
-                f"Compress or trim the audio file. For .wav files, consider "
-                f"exporting as .mp3 or .ogg to reduce size."
+                "Compress or trim the audio file. For .wav files, consider "
+                "exporting as .mp3 or .ogg to reduce size."
             ),
         )
 
@@ -146,7 +152,14 @@ class AudioValidExtensionRule(AbstractRule):
     severity = Severity.WARNING
     context = None  # type: ignore[assignment]  — no host restriction
 
-    def __init__(self, config: "Config", validation_context=None) -> None:
+    def __init__(self, config: Config, validation_context=None) -> None:
+        """Initialize the AudioValidExtensionRule.
+
+        Args:
+            config (Config): Configuration instance with audio file size limits.
+            validation_context: Context for asset metadata collection. Defaults to FilesystemContext.
+
+        """
         super().__init__(config)
         self._validation_context = validation_context or FilesystemContext()
 
@@ -210,7 +223,14 @@ class AudioFilenameLengthRule(AbstractRule):
     severity = Severity.WARNING
     context = None  # type: ignore[assignment]  — no host restriction
 
-    def __init__(self, config: "Config", validation_context=None) -> None:
+    def __init__(self, config: Config, validation_context=None) -> None:
+        """Initialize the AudioFilenameLengthRule.
+
+        Args:
+            config (Config): Configuration instance with audio file size limits.
+            validation_context: Context for asset metadata collection. Defaults to FilesystemContext.
+
+        """
         super().__init__(config)
         self._validation_context = validation_context or FilesystemContext()
 

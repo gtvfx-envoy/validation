@@ -14,10 +14,7 @@ from gt.runtime import HostType
 if TYPE_CHECKING:
     from ..config import Config
 
-
 logger = logging.getLogger(__name__)
-
-
 
 class Severity(Enum):
     """Severity level for a validation failure.
@@ -32,7 +29,6 @@ class Severity(Enum):
     ERROR = "ERROR"
     WARNING = "WARNING"
     INFO = "INFO"
-
 
 @dataclass
 class ValidationResult:
@@ -81,7 +77,6 @@ class ValidationResult:
             f"{self.rule_name:<30} {self.asset_path}\n"
             f"         {self.message}{hint}"
         )
-
 
 class AbstractRule(ABC):
     """Abstract base class for all validation rules.
@@ -138,14 +133,14 @@ class AbstractRule(ABC):
 
         # Read the class-level context attribute (not instance)
         rule_ctx = getattr(type(self), 'context', None)
-        
+
         if rule_ctx is None:
             # No host requirement — always enabled
             return True
-        
+
         try:
             current_host = getCurrentHost()
-            
+
             # Handle tuple/list of HostType values (multi-host rules)
             if isinstance(rule_ctx, (tuple, list)):
                 if current_host not in rule_ctx:
@@ -155,7 +150,7 @@ class AbstractRule(ABC):
                         self.name, rule_ctx, current_host,
                     )
                     return False
-            
+
             # Handle single HostType value
             elif isinstance(rule_ctx, HostType):
                 if rule_ctx != current_host:
@@ -165,7 +160,7 @@ class AbstractRule(ABC):
                         self.name, rule_ctx, current_host,
                     )
                     return False
-            
+
             # Unknown type — allow by default (defensive)
             else:
                 logger.warning(
@@ -176,14 +171,14 @@ class AbstractRule(ABC):
             pass
 
         return True
-    
+
     @property
     def validation_context(self):
         """Return the ValidationContext instance if one was provided.
-        
+
         Returns:
             A :class:`ValidationContext` instance with ``.collect()`` method, or None.
-        
+
         """
         return self._validation_context
 

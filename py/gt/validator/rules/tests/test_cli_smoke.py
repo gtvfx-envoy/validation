@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-
 def find_repo_root():
     """Find the repository root by looking for pyproject.toml."""
     current = Path(__file__).parent
@@ -27,17 +26,15 @@ def find_repo_root():
             raise FileNotFoundError("Could not find repository root (no pyproject.toml found)")
         current = parent
 
-
 REPO_ROOT = find_repo_root()
 
 # Test file is at: py/gt/validator/rules/tests/test_cli_smoke.py
 # Going up 4 levels gets us to repo root (tests -> rules -> validator -> gt -> repo_root)
 SAMPLE_DIR = REPO_ROOT / "resource" / "sample_content" / "filesystem_pack"
 
-
 def find_envoy_binary():
     """Find the envoy binary, trying multiple locations.
-    
+
     Prefers native executables over .bat files for better subprocess compatibility.
     """
     # Try native executables first (better subprocess support)
@@ -46,35 +43,33 @@ def find_envoy_binary():
         r"V:\repo\gtvfx-contrib\gt\envoy\rust\target\debug\envoy.exe",
         r"V:\repo\gtvfx-contrib\gt\envoy\dist\envoy.exe",  # Production bundle layout
     ]
-    
+
     for candidate in candidates:
         if os.path.isfile(candidate):
             return candidate
-    
+
     # Fall back to .bat file (will use cmd /c wrapper)
     bat_candidates = [
         r"V:\repo\gtvfx-contrib\gt\envoy\bin\envoy.bat",
         r"C:\Users\gf_th\.local\bin\envoy.bat",
     ]
-    
+
     for candidate in bat_candidates:
         if os.path.isfile(candidate):
             return candidate
-    
+
     # Try to find via shutil.which (works if on PATH)
     import shutil
     envoy_path = shutil.which("envoy")
     if envoy_path:
         return envoy_path
-    
+
     raise FileNotFoundError(
-        "Could not find envoy binary. Tried:\n" + 
+        "Could not find envoy binary. Tried:\n" +
         "\n".join(f"  - {c}" for c in candidates + bat_candidates)
     )
 
-
 ENVOY_BINARY = find_envoy_binary()
-
 
 def run_validate(*args, **kwargs):
     """Run envoy validate with given arguments and return result."""
@@ -83,7 +78,7 @@ def run_validate(*args, **kwargs):
     env = os.environ.copy()
     # Ensure we use the envoy Python environment
     env["PYTHONIOENCODING"] = "utf-8"
-    
+
     try:
         result = subprocess.run(
             cmd,
@@ -101,7 +96,7 @@ def run_validate(*args, **kwargs):
             result.stdout = ""
         if result.stderr is None:
             result.stderr = ""
-        
+
         return result
     except Exception as e:
         # Return a mock result for error cases
@@ -111,7 +106,6 @@ def run_validate(*args, **kwargs):
                 self.stdout = ""
                 self.stderr = str(err)
         return MockResult(e)
-
 
 @pytest.mark.cli_smoke
 class TestCLISmokeIntegration:
@@ -162,7 +156,7 @@ class TestCLISmokeIntegration:
 
     def test_exit_code_documented_issue(self):
         """Document known exit code issue (#2 in Phase 0).
-        
+
         The CLI currently returns non-zero when validation errors are found.
         This is expected behavior for a validation tool - it should fail if there are errors.
         However, the original plan noted that exit code was always 0, which may have been
@@ -172,7 +166,6 @@ class TestCLISmokeIntegration:
         # The native executable returns non-zero when there are validation failures (expected)
         # This is correct behavior - we just document it here
         assert isinstance(result.returncode, int), "Return code should be an integer"
-
 
 @pytest.mark.cli_smoke
 class TestCLIFlags:
@@ -202,7 +195,6 @@ class TestCLIFlags:
         )
         # Should produce some output
         assert len(result.stdout) > 0 or len(result.stderr) > 0
-
 
 def test_simple_subprocess():
     """Test that subprocess works at all."""

@@ -56,6 +56,13 @@ class MaterialSlotCountRule(AbstractRule):
     context = HostType.UNREAL  # Only runs in Unreal
 
     def __init__(self, config: Config, context: HostType | None = None) -> None:
+        """Initialize the MaterialSlotCountRule.
+
+        Args:
+            config (Config): Configuration instance with material slot limits.
+            context (HostType, optional): Host type for rule execution. Defaults to STANDALONE.
+
+        """
         super().__init__(config)
         self.context = context or HostType.STANDALONE
 
@@ -129,6 +136,13 @@ class MaterialComplexityRule(AbstractRule):
     context = HostType.UNREAL  # Only runs in Unreal
 
     def __init__(self, config: Config, context: HostType | None = None) -> None:
+        """Initialize the MaterialOverdrawHeuristicRule.
+
+        Args:
+            config (Config): Configuration instance with material complexity limits.
+            context (HostType, optional): Host type for rule execution. Defaults to STANDALONE.
+
+        """
         super().__init__(config)
         self.context = context or HostType.STANDALONE
 
@@ -223,6 +237,13 @@ class MaxTranslucentMaterialsRule(AbstractRule):
     context = HostType.UNREAL  # Only runs in Unreal
 
     def __init__(self, config: Config, context: HostType | None = None) -> None:
+        """Initialize the MaxTranslucentMaterialsRule.
+
+        Args:
+            config (Config): Configuration instance with translucent material limits.
+            context (HostType, optional): Host type for rule execution. Defaults to STANDALONE.
+
+        """
         super().__init__(config)
         self.context = context or HostType.STANDALONE
 

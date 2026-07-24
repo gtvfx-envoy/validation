@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from gt.runtime import HostType
+
 from gt.validator.config import Config
 from gt.validator.rules.audio import (
     AudioFilenameLengthRule,
