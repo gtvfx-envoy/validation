@@ -247,12 +247,12 @@ class RuleRegistry:
             A dict mapping HostType values to lists of rule classes.
 
         """
-        from gt.runtime import HostType, getCurrentHost
+        from gt.runtime import HostType
 
         groups: dict[object, list[type]] = {None: []}
         for r in self._rules.values():
             ctx = getattr(r, 'context', None) or HostType.STANDALONE
-            
+
             # Handle multi-context rules — add to each supported context
             if isinstance(ctx, (tuple, list)):
                 for c in ctx:

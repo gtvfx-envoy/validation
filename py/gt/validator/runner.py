@@ -16,8 +16,6 @@ import os
 import time
 from collections.abc import Callable, Iterator
 
-from gt.runtime import HostType, getCurrentHost
-
 from .allowlist import AllowlistManager
 from .config import Config
 from .context.base import ValidationContext
@@ -118,9 +116,9 @@ class ValidationRunner:
                             filtered.append(r)
                     rule_classes = filtered
 
-                # Instantiate rules with the context object.
+                # Instantiate rules with the validation context object.
                 ctx = self.context
-                self.rules = [R(config, context=ctx) for R in rule_classes]
+                self.rules = [R(config, validation_context=ctx) for R in rule_classes]
         except Exception as e:
             logger.error(f"[ValidationRunner] Failed to initialize rules: {e}")
             raise

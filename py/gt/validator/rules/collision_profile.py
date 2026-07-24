@@ -9,12 +9,9 @@ Rules:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
 
 from gt.runtime import HostType
 
-from ..context.base import AssetMetadata, ValidationContext
-from ..config import Config
 from ..registry import registry
 from .base import AbstractRule, Severity, ValidationResult
 
@@ -54,7 +51,7 @@ class CollisionProfileValidatorRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 
@@ -123,7 +120,7 @@ class CollisionLODTransitionSmoothnessRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 

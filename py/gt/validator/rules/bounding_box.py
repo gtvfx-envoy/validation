@@ -29,15 +29,15 @@ def _readMeshBoundsMetrics(metadata: AssetMetadata) -> tuple[float, float, float
     bounds_extent_x = metadata.properties.get("bounds_extent_x", 0)
     bounds_extent_y = metadata.properties.get("bounds_extent_y", 0)
     bounds_extent_z = metadata.properties.get("bounds_extent_z", 0)
-    
+
     extent_x = abs(bounds_extent_x)
     extent_y = abs(bounds_extent_y)
     extent_z = abs(bounds_extent_z)
-    
+
     origin_x = metadata.properties.get("origin_x", 0)
     origin_y = metadata.properties.get("origin_y", 0)
     origin_z = metadata.properties.get("origin_z", 0)
-    
+
     return extent_x, extent_y, extent_z, origin_x, origin_y, origin_z
 
 
@@ -72,7 +72,7 @@ class BoundingBoxExtentRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 
@@ -144,7 +144,7 @@ class BoundingBoxOriginRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 

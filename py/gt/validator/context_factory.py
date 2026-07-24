@@ -13,7 +13,6 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import Optional, Type
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +27,12 @@ class ContextFactory:
     Attributes:
         _contexts: Dict mapping HostType values to context class constructors.
     """
-    
+
     # Mapping from HostType values to context class constructors.
-    _contexts: dict[str, Type[object]] = {}
-    
+    _contexts: dict[str, type[object]] = {}
+
     # Singleton instance — only create once per process.
-    _instance: Optional[ContextFactory] = None
+    _instance: ContextFactory | None = None
 
     def __new__(cls) -> ContextFactory:
         """Return the singleton ContextFactory instance."""
@@ -62,7 +61,7 @@ class ContextFactory:
     # Registration
     # ------------------------------------------------------------------
 
-    def register(self, host_type_value: str, context_cls: Type[object]) -> None:
+    def register(self, host_type_value: str, context_cls: type[object]) -> None:
         """Register a context class for a given HostType value.
 
         Args:

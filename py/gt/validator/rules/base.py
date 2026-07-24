@@ -7,10 +7,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from gt.runtime import HostType
-
 
 if TYPE_CHECKING:
     from ..config import Config
@@ -95,46 +94,32 @@ class AbstractRule(ABC):
         name: Unique snake_case identifier for the rule, e.g. ``"naming_convention"``.
         category: Rule category string used for grouping in reports.
         severity: Default :class:`Severity` for non-passing results.
-        context: Required host type for this rule (e.g., ``HostType.UNREAL``).
-        contexts: Optional tuple/list of acceptable host types for multi-context rules.
+        context: Required host type(s) for this rule. Can be a single :class:`HostType` value
+            (e.g., ``HostType.UNREAL``) or a tuple/list of HostType values for multi-host rules.
 
     """
 
     name: str = ""
     category: str = ""
     severity: Severity = Severity.ERROR
-    context: Optional[HostType] = None  # Type: HostType
-    contexts: Optional[tuple | list] = None
+    context: HostType | tuple[HostType, ...] | list[HostType] | None = None  # Type: HostType or tuple/list of HostTypes
 
-    def __init__(self, config: Config, context=None) -> None:  # type: ignore[assignment]
+    def __init__(self, config: Config, validation_context=None) -> None:
         """Initialise the rule with config and optional validation context.
 
         Args:
             config: Layered Config object.
-            context: A :class:`ValidationContext` instance (with ``.collect()``), a tuple/list
-                of acceptable contexts for multi-context support, or ``None`` to skip metadata checks.
+            validation_context: A :class:`ValidationContext` instance (with ``.collect()``), or ``None`` to skip metadata checks.
                 If ``None``, the rule will use fallback logic that doesn't require asset metadata.
 
         Note:
-            For multi-context support, subclasses can pass a tuple or list of ValidationContext instances.
             The framework's :class:`ValidationRunner` handles context injection automatically — rules do not need to call this directly.
 
         """
         self.config = config
-        # Always initialise `contexts` so isEnabled() can safely check it below,
-        # regardless of which branch is taken for the single-context `context` attr.
-        self.contexts: Optional[tuple | list] = None
-
-        if isinstance(context, (tuple, list)):
-            # Multi-context support: store as-is for isEnabled() matching logic
-            self.contexts = context  # type: ignore[assignment]
-            self.context = None
-        elif context is not None and hasattr(context, 'collect'):
-            # It's a ValidationContext instance — store it directly so rules can call .collect()
-            self.context = context
-        else:
-            # Default to None (rules will use fallback logic that doesn't require metadata)
-            self.context = None  # type: ignore[assignment]
+        # Store validation_context separately from the class-level `context` attribute
+        # to avoid shadowing the HostType requirement declared in the subclass
+        self._validation_context = validation_context if (validation_context is not None and hasattr(validation_context, 'collect')) else None
 
     def isEnabled(self) -> bool:
         """Return whether this rule is enabled in the current config and host.
@@ -149,28 +134,30 @@ class AbstractRule(ABC):
         if not self.config.get(f"require_{self.name}", True):
             return False
 
-        from gt.runtime import HostType, getCurrentHost
+        from gt.runtime import getCurrentHost
 
-        # Multi-context support via tuple/list of contexts.
-        if self.contexts is not None:
-            current_host = getCurrentHost()
-            for ctx in self.contexts:
-                if isinstance(ctx, str):
-                    # String context name (e.g., "UNREAL") — compare case-insensitively.
-                    if ctx.lower() == current_host.value.lower():
-                        return True
-                elif ctx == current_host:
-                    return True
-
-        # Single declared context (e.g. HostType.UNREAL). Read the *class*
-        # attribute rather than the instance attribute: ValidationRunner
-        # overwrites `self.context` (instance) with a ValidationContext
-        # instance (for `.collect()` metadata access), which would otherwise
-        # shadow the rule's declared HostType requirement here.
+        # Read the class-level context attribute (not instance)
         rule_ctx = getattr(type(self), 'context', None)
-        if rule_ctx is not None and not isinstance(rule_ctx, type(None)):
-            try:
-                current_host = getCurrentHost()
+        
+        if rule_ctx is None:
+            # No host requirement — always enabled
+            return True
+        
+        try:
+            current_host = getCurrentHost()
+            
+            # Handle tuple/list of HostType values (multi-host rules)
+            if isinstance(rule_ctx, (tuple, list)):
+                if current_host not in rule_ctx:
+                    logger.debug(
+                        "[Rule] %s skipped — context mismatch "
+                        "(rule requires one of %r, current host is %r).",
+                        self.name, rule_ctx, current_host,
+                    )
+                    return False
+            
+            # Handle single HostType value
+            elif isinstance(rule_ctx, HostType):
                 if rule_ctx != current_host:
                     logger.debug(
                         "[Rule] %s skipped — context mismatch "
@@ -178,10 +165,27 @@ class AbstractRule(ABC):
                         self.name, rule_ctx, current_host,
                     )
                     return False
-            except Exception:  # noqa: BLE001 - runtime may not be available
-                pass
+            
+            # Unknown type — allow by default (defensive)
+            else:
+                logger.warning(
+                    "[Rule] %s has unsupported context type %r; allowing execution.",
+                    self.name, type(rule_ctx),
+                )
+        except Exception:  # noqa: BLE001 - runtime may not be available
+            pass
 
         return True
+    
+    @property
+    def validation_context(self):
+        """Return the ValidationContext instance if one was provided.
+        
+        Returns:
+            A :class:`ValidationContext` instance with ``.collect()`` method, or None.
+        
+        """
+        return self._validation_context
 
     @abstractmethod
     def validate(self, asset_path: str) -> ValidationResult:

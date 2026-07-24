@@ -10,10 +10,9 @@ Rules:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
 
-from ..context.base import AssetMetadata, ValidationContext
-from ..config import Config
+from gt.runtime import HostType
+
 from ..registry import registry
 from .base import AbstractRule, Severity, ValidationResult
 
@@ -28,14 +27,14 @@ class TextureDimensionRule(AbstractRule):
         name: Rule identifier ``"texture_dimension"``.
         category: Rule category ``"texture"``.
         severity: :attr:`Severity.ERROR`.
-        context: Requires Unreal Engine host (HostType.UNREAL).
+        context: Works on any host (STANDALONE) for basic dimension checks.
 
     """
 
     name = "texture_dimension"
     category = "texture"
     severity = Severity.ERROR
-    context = None  # Multi-context: will be set at runtime based on host type
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the dimensions of the given texture asset.
@@ -50,7 +49,7 @@ class TextureDimensionRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 
@@ -117,7 +116,7 @@ class TextureCompressionRule(AbstractRule):
     name = "texture_compression"
     category = "texture"
     severity = Severity.WARNING
-    context = None  # Multi-context: will be set at runtime based on host type
+    context = HostType.UNREAL
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the compression settings of the given texture asset.
@@ -132,7 +131,7 @@ class TextureCompressionRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 
@@ -147,7 +146,7 @@ class TextureCompressionRule(AbstractRule):
 
             # Check compression from metadata if available.
             compression = meta.properties.get("compression_settings")
-            
+
             if is_normal_map and compression != "TC_Normalmap":
                 return self._makeResult(
                     asset_path,
@@ -190,7 +189,7 @@ class TextureSampleRule(AbstractRule):
     name = "texture_samples"
     category = "texture"
     severity = Severity.WARNING
-    context = None  # Multi-context: will be set at runtime based on host type
+    context = HostType.UNREAL
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the MIP/sample count of the given texture.
@@ -205,16 +204,16 @@ class TextureSampleRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 
         if meta is not None:
             max_samples = self.config.get("max_texture_samples", 16)
-            
+
             # Get MIP count from metadata or estimate from resolution.
             num_mips = meta.properties.get("mip_count")
-            
+
             if num_mips is None or (isinstance(num_mips, int) and num_mips <= 0):
                 # Estimate from resolution. `width` lives in `properties` (no
                 # `.width` attribute exists on AssetMetadata). `min(x)` on a

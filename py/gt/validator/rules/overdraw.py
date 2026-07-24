@@ -5,6 +5,8 @@ materials using translucent or additive blend modes because they are
 common overdraw risk indicators.
 """
 
+from gt.runtime import HostType
+
 from ..env import HAS_UNREAL
 from ..registry import registry
 from .base import AbstractRule, Severity, ValidationResult
@@ -26,11 +28,18 @@ class OverdrawHeuristicRule(AbstractRule):
 
     1. Translucent or Additive blend mode.
 
+    Attributes:
+        name: Rule identifier ``"overdraw_heuristic"``.
+        category: Rule category ``"overdraw"``.
+        severity: :attr:`Severity.INFO`.
+        context: Requires Unreal Engine (HostType.UNREAL).
+
     """
 
     name = "overdraw_heuristic"
     category = "overdraw"
     severity = Severity.INFO
+    context = HostType.UNREAL
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Check *asset_path* for heuristic overdraw risk indicators.

@@ -30,7 +30,13 @@ import sys
 
 from .config import Config
 from .env import HAS_UNREAL
-from .reporting.formatters import ConsoleFormatter, HTMLFormatter, JSONFormatter
+from .reporting.formatters import (
+    ConsoleFormatter,
+    HTMLFormatter,
+    JSONFormatter,
+    JUnitXMLFormatter,
+    SARIFFormatter,
+)
 from .reporting.models import ValidationReport
 from .rules.base import Severity
 from .runner import ValidationRunner
@@ -41,6 +47,8 @@ _FORMATTERS = {
     "console": ConsoleFormatter,
     "json": JSONFormatter,
     "html": HTMLFormatter,
+    "sarif": SARIFFormatter,
+    "junit": JUnitXMLFormatter,
 }
 
 
@@ -261,7 +269,7 @@ def buildParser() -> argparse.ArgumentParser:
         epilog="""
 environment variable overrides (all optional):
   VALIDATOR_CONFIG_PATH     — path to JSON config file
-  VALIDATOR_FORMAT          — output format: console | json | html
+  VALIDATOR_FORMAT          — output format: console | json | html | sarif | junit
   VALIDATOR_OUTPUT_DIR      — directory to write report file
   VALIDATOR_LOG_LEVEL       — logging verbosity: DEBUG | INFO | WARNING | ERROR
   VALIDATOR_MAX_WORKERS     — number of parallel worker threads (1 = serial)
@@ -297,7 +305,7 @@ exit codes:
     parser.add_argument(
         "--format",
         "-f",
-        choices=["console", "json", "html"],
+            choices=["console", "json", "html", "sarif", "junit"],
         default=None,
         help="Output format (default: console, or VALIDATOR_FORMAT env var).",
     )
@@ -483,7 +491,12 @@ def main(argv: list[str] | None = None) -> int:
 
         if output_dir and fmt != "console":
             os.makedirs(output_dir, exist_ok=True)
-            ext = {"json": ".json", "html": ".html"}.get(fmt, ".txt")
+            ext = {
+                "json": ".json",
+                "html": ".html",
+                "sarif": ".sarif.json",
+                "junit": ".xml",
+            }.get(fmt, ".txt")
             from datetime import datetime
 
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")

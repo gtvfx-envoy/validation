@@ -1,0 +1,60 @@
+name: Pytest
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: Pytest (envoy Python 3.11)
+    runs-on: ["self-hosted", "Linux", "X64", "synology"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11 (envoy runtime)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install gt-envoy CLI
+        run: |
+          pip install --upgrade pip
+          # Install gt-envoy from the gtvfx-contrib organization
+          pip install git+https://github.com/gtvfx-contrib/gt-envoy.git@main
+
+      - name: Bootstrap gt.globals bundle (provides runtime dependencies)
+        working-directory: ${{ github.workspace }}
+        run: |
+          # Clone and install gt.globals to get the full runtime environment
+          git clone --depth 1 https://github.com/gtvfx-contrib/gt-globals.git /tmp/gt-globals
+          cd /tmp/gt-globals/py
+          pip install -e .
+
+      - name: Install gt-validation with dev extras
+        working-directory: ${{ github.workspace }}/py
+        run: |
+          pip install --upgrade pip
+          pip install -e ..[dev]
+
+      - name: Run pytest via envoy Python
+        working-directory: ${{ github.workspace }}
+        run: |
+          # Use `en python` to ensure the full envoy-resolved Python 3.11 environment is used
+          # This provides gt.runtime, gt.krita (if available), and all bundle dependencies
+          en python -m pytest py/ -v --tb=short
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results-${{ github.sha }}
+          path: |
+            **/.pytest_cache/v/cache/lastfailed
+            **/.pytest_cache/v/cache/nodeids

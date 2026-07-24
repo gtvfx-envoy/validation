@@ -9,6 +9,8 @@ Rules:
 
 from __future__ import annotations
 
+from gt.runtime import HostType
+
 from ..env import loadUnrealAsset
 from ..errors import UnrealAPIError
 from ..registry import registry
@@ -23,12 +25,14 @@ class StaticMeshLODCountRule(AbstractRule):
         name: Rule identifier ``"static_mesh_lod_count"``.
         category: Rule category ``"static_mesh"``.
         severity: :attr:`Severity.ERROR`.
+        context: Requires Unreal Engine (HostType.UNREAL).
 
     """
 
     name = "static_mesh_lod_count"
     category = "static_mesh"
     severity = Severity.ERROR
+    context = HostType.UNREAL
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the LOD count of the given StaticMesh asset.
@@ -92,12 +96,14 @@ class StaticMeshMaterialSlotRule(AbstractRule):
         name: Rule identifier ``"static_mesh_material_slots"``.
         category: Rule category ``"static_mesh"``.
         severity: :attr:`Severity.WARNING`.
+        context: Requires Unreal Engine (HostType.UNREAL).
 
     """
 
     name = "static_mesh_material_slots"
     category = "static_mesh"
     severity = Severity.WARNING
+    context = HostType.UNREAL
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the material slot count of the given StaticMesh asset.
@@ -154,12 +160,14 @@ class StaticMeshBoundsRule(AbstractRule):
         name: Rule identifier ``"static_mesh_bounds"``.
         category: Rule category ``"static_mesh"``.
         severity: :attr:`Severity.WARNING`.
+        context: Requires Unreal Engine (HostType.UNREAL).
 
     """
 
     name = "static_mesh_bounds"
     category = "static_mesh"
     severity = Severity.WARNING
+    context = HostType.UNREAL
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the bounding box extent of the given StaticMesh asset.

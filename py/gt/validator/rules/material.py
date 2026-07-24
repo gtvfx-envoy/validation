@@ -10,7 +10,7 @@ Rules:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from gt.runtime import HostType
 
@@ -71,6 +71,7 @@ class MaterialSlotCountRule(AbstractRule):
         """
         try:
             import unreal as _ue  # noqa: PLC0415 - deferred to avoid top-level ImportError
+
             from ..env import loadUnrealAsset
 
             asset = loadUnrealAsset(asset_path)
@@ -150,6 +151,7 @@ class MaterialComplexityRule(AbstractRule):
 
         try:
             import unreal as _ue  # noqa: PLC0415 - deferred to avoid top-level ImportError
+
             from ..env import loadUnrealAsset
 
             asset = loadUnrealAsset(asset_path)
@@ -240,6 +242,7 @@ class MaxTranslucentMaterialsRule(AbstractRule):
 
         try:
             import unreal as _ue  # noqa: PLC0415 - deferred to avoid top-level ImportError
+
             from ..env import loadUnrealAsset
 
             asset = loadUnrealAsset(asset_path)

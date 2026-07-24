@@ -106,22 +106,6 @@ CONFIG_SCHEMA: dict[str, type | tuple] = {
     "max_lod_scale_jump": (int, float),
     # AnimSequence rules
     "max_anim_sequence_frame_count": int,
-    # SkeletalMesh rules
-    "max_skeletal_mesh_bone_count": int,
-    "max_animation_duration_seconds": float,
-    # CollisionProfile rules
-    "max_collision_profile_complexity": int,
-    "max_lod_scale_jump": (int, float),
-    # AnimSequence rules
-    "max_anim_sequence_frame_count": int,
-    # SkeletalMesh rules
-    "max_skeletal_mesh_bone_count": int,
-    "max_animation_duration_seconds": float,
-    # CollisionProfile rules
-    "max_collision_profile_complexity": int,
-    "max_lod_scale_jump": (int, float),
-    # AnimSequence rules
-    "max_anim_sequence_frame_count": int,
 }
 
 

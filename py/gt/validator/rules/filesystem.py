@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import os
 
-from ..context.base import AssetMetadata, ValidationContext
+from gt.runtime import HostType
+
 from ..registry import registry
 from .base import AbstractRule, Severity, ValidationResult
 
@@ -23,12 +24,14 @@ class FileSizeRule(AbstractRule):
         name: Rule identifier ``"file_size"``.
         category: Rule category ``"filesystem"``.
         severity: :attr:`Severity.ERROR`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "file_size"
     category = "filesystem"
     severity = Severity.ERROR
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the file size for the given asset.
@@ -52,7 +55,7 @@ class FileSizeRule(AbstractRule):
             )
 
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             return self._makeSkipped(
                 asset_path,
@@ -86,12 +89,14 @@ class ValidExtensionRule(AbstractRule):
         name: Rule identifier ``"valid_extension"``.
         category: Rule category ``"filesystem"``.
         severity: :attr:`Severity.ERROR`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "valid_extension"
     category = "filesystem"
     severity = Severity.ERROR
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the file extension for the given asset.
@@ -113,7 +118,7 @@ class ValidExtensionRule(AbstractRule):
             )
 
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             return self._makeSkipped(
                 asset_path,

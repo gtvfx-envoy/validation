@@ -12,7 +12,8 @@ from __future__ import annotations
 import os
 import re
 
-from ..context.base import AssetMetadata, ValidationContext
+from gt.runtime import HostType
+
 from ..registry import registry
 from .base import AbstractRule, Severity, ValidationResult
 
@@ -25,12 +26,14 @@ class NamingConventionRule(AbstractRule):
         name: Rule identifier ``"naming_convention"``.
         category: Rule category ``"naming"``.
         severity: :attr:`Severity.ERROR`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "naming_convention"
     category = "naming"
     severity = Severity.ERROR
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the naming convention for the given asset.
@@ -45,7 +48,7 @@ class NamingConventionRule(AbstractRule):
         """
         # Use context to collect metadata when available.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 
@@ -84,12 +87,14 @@ class PrefixConventionRule(AbstractRule):
         name: Rule identifier ``"prefix_convention"``.
         category: Rule category ``"naming"``.
         severity: :attr:`Severity.ERROR`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "prefix_convention"
     category = "naming"
     severity = Severity.ERROR
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the prefix convention for the given asset.
@@ -104,7 +109,7 @@ class PrefixConventionRule(AbstractRule):
         """
         # Use context to collect metadata when available.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 
@@ -183,12 +188,14 @@ class FilenameLengthRule(AbstractRule):
         name: Rule identifier ``"filename_length"``.
         category: Rule category ``"naming"``.
         severity: :attr:`Severity.WARNING`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "filename_length"
     category = "naming"
     severity = Severity.WARNING
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the filename length for the given asset.
@@ -203,7 +210,7 @@ class FilenameLengthRule(AbstractRule):
         """
         # Use context to collect metadata when available.
         try:
-            meta = self.context.collect(asset_path) if getattr(self, 'context', None) is not None else None
+            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
         except (AttributeError, TypeError):
             meta = None
 

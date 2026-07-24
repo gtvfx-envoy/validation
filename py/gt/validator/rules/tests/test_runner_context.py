@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent.parent  # goes to V:\repo\gtvfx-contrib\gt\validation
 if str(ROOT) not in sys.path:
@@ -27,16 +28,26 @@ from gt.validator.runner import ValidationRunner
 class TestValidationRunnerContext(unittest.TestCase):
     """Test ValidationRunner context handling.
 
-    These tests run in a plain standalone Python process (no Unreal/Maya/etc.
-    importable), so ``gt.runtime.getCurrentHost()`` resolves to
-    ``HostType.STANDALONE`` for real — no monkeypatching of runtime internals
-    is needed or attempted.
+    These tests monkeypatch ``RuntimeDetector.getCurrentHost`` to return a
+    known value so the runner's context-filtering logic can be verified
+    deterministically regardless of what host detection finds in the test
+    environment (e.g. envoy may expose Krita/Unreal stubs that would
+    otherwise confuse the detector).
     """
 
     def setUp(self) -> None:
-        """Clear the registry before each test."""
+        """Clear the registry and force STANDALONE host for each test."""
         registry.clear()
         self.config = Config()  # Use defaults instead of Mock for production rules
+        self._host_patcher = patch(
+            "gt.runtime.RuntimeDetector.getCurrentHost",
+            return_value=HostType.STANDALONE,
+        )
+        self._host_patcher.start()
+
+    def tearDown(self) -> None:
+        """Stop the host-type monkeypatch."""
+        self._host_patcher.stop()
 
     def test_runner_gets_current_context(self) -> None:
         """ValidationRunner auto-detects a ValidationContext when none is given."""
@@ -64,7 +75,7 @@ class TestValidationRunnerContext(unittest.TestCase):
         matching = [r for r in runner.rules if r.name == "sample_standalone_rule"]
         self.assertEqual(len(matching), 1)
         # The rule should have received the runner's own context instance.
-        self.assertIs(matching[0].context, runner.context)
+        self.assertIs(matching[0]._validation_context, runner.context)
 
     def test_runner_filters_rules_by_context(self) -> None:
         """ValidationRunner only instantiates rules matching the current host."""

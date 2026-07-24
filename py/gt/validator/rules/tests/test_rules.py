@@ -19,6 +19,10 @@ ROOT = Path(__file__).resolve().parent.parent.parent  # goes to V:\repo\gtvfx-co
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from unittest.mock import patch
+
+from gt.runtime import HostType
+
 from gt.validator.config import Config  # type: ignore
 from gt.validator.context.base import AssetMetadata, ValidationContext  # type: ignore
 from gt.validator.context.filesystem import FilesystemContext  # type: ignore
@@ -68,12 +72,12 @@ class TestNamingConventionRule(unittest.TestCase):
         self.context = FilesystemContext()
 
     def test_valid_naming(self) -> None:
-        rule = NamingConventionRule(self.config, context=self.context)
+        rule = NamingConventionRule(self.config, validation_context=self.context)
         result = rule.validate("SM_MyAsset.uasset")
         self.assertTrue(result.passed)
 
     def test_invalid_naming(self) -> None:
-        rule = NamingConventionRule(self.config, context=self.context)
+        rule = NamingConventionRule(self.config, validation_context=self.context)
         result = rule.validate("my_asset.uasset")
         self.assertFalse(result.passed)
 
@@ -90,7 +94,7 @@ class TestFileSizeRule(unittest.TestCase):
             f.write(b"small file content")
             path = f.name
         try:
-            rule = FileSizeRule(self.config, context=self.context)
+            rule = FileSizeRule(self.config, validation_context=self.context)
             result = rule.validate(path)
             self.assertTrue(result.passed)
         finally:
@@ -101,7 +105,7 @@ class TestFileSizeRule(unittest.TestCase):
             f.write(b"A" * (60 * 1024 * 1024))  # 60MB
             path = f.name
         try:
-            rule = FileSizeRule(self.config, context=self.context)
+            rule = FileSizeRule(self.config, validation_context=self.context)
             result = rule.validate(path)
             self.assertFalse(result.passed)
         finally:
@@ -119,7 +123,7 @@ class TestValidExtensionRule(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".uasset") as f:
             path = f.name
         try:
-            rule = ValidExtensionRule(self.config, context=self.context)
+            rule = ValidExtensionRule(self.config, validation_context=self.context)
             result = rule.validate(path)
             self.assertTrue(result.passed)
         finally:
@@ -129,7 +133,7 @@ class TestValidExtensionRule(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xyz") as f:
             path = f.name
         try:
-            rule = ValidExtensionRule(self.config, context=self.context)
+            rule = ValidExtensionRule(self.config, validation_context=self.context)
             result = rule.validate(path)
             self.assertFalse(result.passed)
         finally:
@@ -147,7 +151,7 @@ class TestPrefixConventionRule(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False, prefix="SM_", suffix=".uasset") as f:
             path = f.name
         try:
-            rule = PrefixConventionRule(self.config, context=self.context)
+            rule = PrefixConventionRule(self.config, validation_context=self.context)
             result = rule.validate(path)
             self.assertTrue(result.passed)
         finally:
@@ -157,7 +161,7 @@ class TestPrefixConventionRule(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False, prefix="bad_", suffix=".uasset") as f:
             path = f.name
         try:
-            rule = PrefixConventionRule(self.config, context=self.context)
+            rule = PrefixConventionRule(self.config, validation_context=self.context)
             result = rule.validate(path)
             self.assertFalse(result.passed)
         finally:
@@ -172,12 +176,12 @@ class TestFilenameLengthRule(unittest.TestCase):
         self.context = FilesystemContext()
 
     def test_valid_length(self) -> None:
-        rule = FilenameLengthRule(self.config, context=self.context)
+        rule = FilenameLengthRule(self.config, validation_context=self.context)
         result = rule.validate("SM_MyAsset.uasset")
         self.assertTrue(result.passed)
 
     def test_long_filename(self) -> None:
-        rule = FilenameLengthRule(self.config, context=self.context)
+        rule = FilenameLengthRule(self.config, validation_context=self.context)
         long_name = "A" * 70 + ".uasset"
         result = rule.validate(long_name)
         self.assertFalse(result.passed)
@@ -194,7 +198,7 @@ class TestBoundingBoxExtentRule(unittest.TestCase):
             path="/Game/MyMesh.uasset",
             properties={"bounds_extent_x": 10.0, "bounds_extent_y": 20.0, "bounds_extent_z": 15.0},
         )
-        rule = BoundingBoxExtentRule(self.config, context=_FakeMetadataContext(meta))
+        rule = BoundingBoxExtentRule(self.config, validation_context=_FakeMetadataContext(meta))
         result = rule.validate("/Game/MyMesh.uasset")
         self.assertTrue(result.passed)
 
@@ -203,7 +207,7 @@ class TestBoundingBoxExtentRule(unittest.TestCase):
             path="/Game/MyMesh.uasset",
             properties={"bounds_extent_x": 9999.0, "bounds_extent_y": 20.0, "bounds_extent_z": 15.0},
         )
-        rule = BoundingBoxExtentRule(self.config, context=_FakeMetadataContext(meta))
+        rule = BoundingBoxExtentRule(self.config, validation_context=_FakeMetadataContext(meta))
         result = rule.validate("/Game/MyMesh.uasset")
         self.assertFalse(result.passed)
 
@@ -219,7 +223,7 @@ class TestBoundingBoxOriginRule(unittest.TestCase):
             path="/Game/MyMesh.uasset",
             properties={"origin_x": 1.0, "origin_y": 1.0, "origin_z": 1.0},
         )
-        rule = BoundingBoxOriginRule(self.config, context=_FakeMetadataContext(meta))
+        rule = BoundingBoxOriginRule(self.config, validation_context=_FakeMetadataContext(meta))
         result = rule.validate("/Game/MyMesh.uasset")
         self.assertTrue(result.passed)
 
@@ -232,13 +236,13 @@ class TestSkeletalMeshLODCountRule(unittest.TestCase):
 
     def test_valid_lod_count_within_range(self) -> None:
         meta = AssetMetadata(path="/Game/SK_Hero.uasset", properties={"lod_count": 3})
-        rule = SkeletalMeshLODCountRule(self.config, context=_FakeMetadataContext(meta))
+        rule = SkeletalMeshLODCountRule(self.config, validation_context=_FakeMetadataContext(meta))
         result = rule.validate("/Game/SK_Hero.uasset")
         self.assertTrue(result.passed)
 
     def test_lod_count_below_minimum(self) -> None:
         meta = AssetMetadata(path="/Game/SK_Hero.uasset", properties={"lod_count": 0})
-        rule = SkeletalMeshLODCountRule(self.config, context=_FakeMetadataContext(meta))
+        rule = SkeletalMeshLODCountRule(self.config, validation_context=_FakeMetadataContext(meta))
         result = rule.validate("/Game/SK_Hero.uasset")
         self.assertFalse(result.passed)
 
@@ -255,7 +259,7 @@ class TestStaticMeshLODCountRule(unittest.TestCase):
         self.context = FilesystemContext()
 
     def test_skips_outside_unreal(self) -> None:
-        rule = StaticMeshLODCountRule(self.config, context=self.context)
+        rule = StaticMeshLODCountRule(self.config, validation_context=self.context)
         result = rule.validate("/Game/MyMesh.uasset")
         self.assertTrue(result.passed)
         self.assertTrue(result.skipped)
@@ -269,7 +273,7 @@ class TestStaticMeshMaterialSlotRule(unittest.TestCase):
         self.context = FilesystemContext()
 
     def test_skips_outside_unreal(self) -> None:
-        rule = StaticMeshMaterialSlotRule(self.config, context=self.context)
+        rule = StaticMeshMaterialSlotRule(self.config, validation_context=self.context)
         result = rule.validate("/Game/MyMaterial.uasset")
         self.assertTrue(result.passed)
         self.assertTrue(result.skipped)
@@ -283,7 +287,7 @@ class TestOverdrawHeuristicRule(unittest.TestCase):
         self.context = FilesystemContext()
 
     def test_skips_outside_unreal(self) -> None:
-        rule = OverdrawHeuristicRule(self.config, context=self.context)
+        rule = OverdrawHeuristicRule(self.config, validation_context=self.context)
         result = rule.validate("/Game/MyMaterial.uasset")
         self.assertTrue(result.passed)
         self.assertTrue(result.skipped)
@@ -295,6 +299,15 @@ class TestValidationRunnerIntegration(unittest.TestCase):
     def setUp(self) -> None:
         rule_registry.clear()
         self.config = Config()
+        self._host_patcher = patch(
+            "gt.runtime.RuntimeDetector.getCurrentHost",
+            return_value=HostType.STANDALONE,
+        )
+        self._host_patcher.start()
+
+    def tearDown(self) -> None:
+        """Stop the host-type monkeypatch."""
+        self._host_patcher.stop()
 
     def test_runner_with_real_assets(self) -> None:
         from gt.validator.runner import ValidationRunner  # type: ignore
