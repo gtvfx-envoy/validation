@@ -1,9 +1,9 @@
 """Material validation rules.
 
 Rules:
-    MaterialSlotCountRule: Validates that materials don't exceed configured slot count.
-    MaterialComplexityRule: Flags materials using Translucent or Additive blend modes as overdraw risk indicators.
-    MaxTranslucentMaterialsRule: Checks total count of translucent materials in a level against config limit.
+    MaterialSlotCountRule: Validates material slot count limits.
+    MaterialComplexityRule: Flags Translucent or Additive blend modes as overdraw risks.
+    MaxTranslucentMaterialsRule: Checks translucent material count against config limit.
 
 """
 
@@ -88,19 +88,23 @@ class MaterialSlotCountRule(AbstractRule):
         if not isinstance(asset, _ue.Material):
             return self._makeSkipped(
                 asset_path,
-                f"MaterialSlotCountRule applies to Material assets only (got {type(asset).__name__}).",
+                f"MaterialSlotCountRule applies to Material assets only "
+                f"(got {type(asset).__name__})."
             )
 
         try:
             max_slots = self.config.get("max_material_slots", 4)
-            actual_slots = len(asset.material_dependencies) if hasattr(asset, "material_dependencies") else 0
+            actual_slots = (
+                len(asset.material_dependencies) if hasattr(asset, "material_dependencies") else 0
+            )
 
             if actual_slots > max_slots:
                 return self._makeResult(
                     asset_path,
                     passed=False,
                     message=(
-                        f"Material uses {actual_slots} material dependencies - exceeds limit of {max_slots}."
+                        f"Material uses {actual_slots} material dependencies - exceeds limit of "
+                        f"{max_slots}."
                     ),
                     fix_hint=f"Reduce the number of material references to {max_slots} or fewer.",
                 )
@@ -108,7 +112,8 @@ class MaterialSlotCountRule(AbstractRule):
                 asset_path,
                 passed=True,
                 message=(
-                    f"Material uses {actual_slots} material dependencies - within limit of {max_slots}."
+                    f"Material uses {actual_slots} material dependencies - within limit of "
+                    f"{max_slots}."
                 ),
             )
         except Exception as exc:  # noqa: BLE001 - Unreal bridge safety
@@ -306,7 +311,8 @@ class MaxTranslucentMaterialsRule(AbstractRule):
                 asset_path,
                 passed=False,
                 message=(
-                    f"{translucent_count} translucent materials found - exceeds limit of {max_limit}."
+                    f"{translucent_count} translucent materials found - exceeds limit of "
+                    f"{max_limit}."
                 ),
                 fix_hint=(
                     f"Reduce the number of translucent/additive materials "

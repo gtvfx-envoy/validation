@@ -15,7 +15,9 @@ from ..registry import registry
 from .base import AbstractRule, Severity, ValidationResult
 
 
-def _readMeshBoundsMetrics(metadata: AssetMetadata) -> tuple[float, float, float, float, float, float]:
+def _readMeshBoundsMetrics(
+    metadata: AssetMetadata,
+) -> tuple[float, float, float, float, float, float]:
     """Return mesh extents and center components from metadata.
 
     Args:
@@ -72,7 +74,11 @@ class BoundingBoxExtentRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -107,7 +113,7 @@ class BoundingBoxExtentRule(AbstractRule):
         # Fallback: if context cannot provide metadata, skip validation.
         return self._makeSkipped(
             asset_path,
-            "Bounding box extent validation requires Unreal Engine host or filesystem access."
+            "Bounding box extent validation requires Unreal Engine host or filesystem access.",
         )
 
 
@@ -144,7 +150,11 @@ class BoundingBoxOriginRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -180,5 +190,5 @@ class BoundingBoxOriginRule(AbstractRule):
         # Fallback: if context cannot provide metadata, skip validation.
         return self._makeSkipped(
             asset_path,
-            "Bounding box origin validation requires Unreal Engine host or filesystem access."
+            "Bounding box origin validation requires Unreal Engine host or filesystem access.",
         )

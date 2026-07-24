@@ -49,7 +49,11 @@ class TextureDimensionRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -95,7 +99,7 @@ class TextureDimensionRule(AbstractRule):
         # Fallback: if context cannot provide metadata, skip validation.
         return self._makeSkipped(
             asset_path,
-            "Texture dimension validation requires Unreal Engine host or filesystem access."
+            "Texture dimension validation requires Unreal Engine host or filesystem access.",
         )
 
 
@@ -131,7 +135,11 @@ class TextureCompressionRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -170,7 +178,7 @@ class TextureCompressionRule(AbstractRule):
         # Fallback: if context cannot provide metadata, skip validation.
         return self._makeSkipped(
             asset_path,
-            "Texture compression validation requires Unreal Engine host or filesystem access."
+            "Texture compression validation requires Unreal Engine host or filesystem access.",
         )
 
 
@@ -204,7 +212,11 @@ class TextureSampleRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -234,21 +246,17 @@ class TextureSampleRule(AbstractRule):
                 return self._makeResult(
                     asset_path,
                     passed=False,
-                    message=(
-                        f"Texture has {num_mips} sample(s) — exceeds limit of {max_samples}."
-                    ),
+                    message=(f"Texture has {num_mips} sample(s) — exceeds limit of {max_samples}."),
                     fix_hint=f"Reduce MIP levels to {max_samples} or fewer.",
                 )
             return self._makeResult(
                 asset_path,
                 passed=True,
-                message=(
-                    f"Texture has {num_mips} sample(s) — within limit of {max_samples}."
-                ),
+                message=(f"Texture has {num_mips} sample(s) — within limit of {max_samples}."),
             )
 
         # Fallback: if context cannot provide metadata, skip validation.
         return self._makeSkipped(
             asset_path,
-            "Texture MIP count validation requires Unreal Engine host or filesystem access."
+            "Texture MIP count validation requires Unreal Engine host or filesystem access.",
         )

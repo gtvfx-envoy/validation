@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+
 def find_repo_root():
     """Find the repository root by looking for pyproject.toml."""
     current = Path(__file__).parent
@@ -122,7 +123,10 @@ class TestCLISmokeIntegration:
         """Verify console format produces readable output."""
         result = run_validate("--format", "console")
         # Console format should have header and summary sections
-        assert "ASSET VALIDATION REPORT" in result.stdout or "validation report" in result.stdout.lower()
+        assert (
+            "ASSET VALIDATION REPORT" in result.stdout
+            or "validation report" in result.stdout.lower()
+        )
 
     def test_json_format_output(self):
         """Verify JSON format produces valid output."""
@@ -152,7 +156,11 @@ class TestCLISmokeIntegration:
             env=env
         )
         # Should fail gracefully (not crash) - returncode != 0 or has error message
-        assert result.returncode != 0 or "error" in result.stderr.lower() or "Error" in result.stdout
+        assert (
+            result.returncode != 0
+            or "error" in result.stderr.lower()
+            or "Error" in result.stdout
+        )
 
     def test_exit_code_documented_issue(self):
         """Document known exit code issue (#2 in Phase 0).

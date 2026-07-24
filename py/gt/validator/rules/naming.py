@@ -48,7 +48,11 @@ class NamingConventionRule(AbstractRule):
         """
         # Use context to collect metadata when available.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -109,7 +113,11 @@ class PrefixConventionRule(AbstractRule):
         """
         # Use context to collect metadata when available.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -210,7 +218,11 @@ class FilenameLengthRule(AbstractRule):
         """
         # Use context to collect metadata when available.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 

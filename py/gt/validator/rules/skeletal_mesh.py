@@ -53,7 +53,11 @@ class SkeletalMeshLODCountRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -66,7 +70,10 @@ class SkeletalMeshLODCountRule(AbstractRule):
                 return self._makeResult(
                     asset_path,
                     passed=False,
-                    message=f"SkeletalMesh has {lod_count} LOD(s) — minimum required is {min_lods}.",
+                    message=(
+                        f"SkeletalMesh has {lod_count} LOD(s) — minimum required is "
+                        f"{min_lods}."
+                    ),
                     asset_class="SkeletalMesh",
                     fix_hint=(
                         f"Add at least {min_lods - lod_count} more LOD "
@@ -90,8 +97,7 @@ class SkeletalMeshLODCountRule(AbstractRule):
 
         # Fallback: if context cannot provide metadata, skip validation.
         return self._makeSkipped(
-            asset_path,
-            "LOD count validation requires Unreal Engine host or filesystem access."
+            asset_path, "LOD count validation requires Unreal Engine host or filesystem access."
         )
 
 
@@ -129,7 +135,11 @@ class SkeletalMeshAnimationLengthRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -161,7 +171,7 @@ class SkeletalMeshAnimationLengthRule(AbstractRule):
         # Fallback: if context cannot provide metadata, skip validation.
         return self._makeSkipped(
             asset_path,
-            "Animation length validation requires Unreal Engine host or filesystem access."
+            "Animation length validation requires Unreal Engine host or filesystem access.",
         )
 
 
@@ -199,7 +209,11 @@ class SkeletalMeshBoneCountRule(AbstractRule):
         """
         # Use context abstraction to collect metadata instead of direct Unreal API calls.
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             meta = None
 
@@ -222,14 +236,11 @@ class SkeletalMeshBoneCountRule(AbstractRule):
             return self._makeResult(
                 asset_path,
                 passed=True,
-                message=(
-                    f"SkeletalMesh has {bone_count} bones — within limit of {max_bones}."
-                ),
+                message=(f"SkeletalMesh has {bone_count} bones — within limit of {max_bones}."),
                 asset_class="SkeletalMesh",
             )
 
         # Fallback: if context cannot provide metadata, skip validation.
         return self._makeSkipped(
-            asset_path,
-            "Bone count validation requires Unreal Engine host or filesystem access."
+            asset_path, "Bone count validation requires Unreal Engine host or filesystem access."
         )

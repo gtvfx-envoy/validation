@@ -56,7 +56,9 @@ class AnimSequenceFrameCountRule(AbstractRule):
         import unreal  # noqa: PLC0415 - deferred Unreal import
 
         if not isinstance(asset, unreal.AnimSequence):
-            return self._makeSkipped(asset_path, f"Not an AnimSequence (got {type(asset).__name__}).")
+            return self._makeSkipped(
+                asset_path, f"Not an AnimSequence (got {type(asset).__name__})."
+            )
 
         try:
             max_frames = self.config.get("max_anim_sequence_frame_count", 1800)
@@ -65,11 +67,11 @@ class AnimSequenceFrameCountRule(AbstractRule):
             num_frames = getattr(asset, "num_frames", None) or getattr(asset, "frames", None)
             if num_frames is None:
                 try:
-                    num_frames = asset.get_editor_property("num_frames") or asset.get_editor_property("frame_count")
+                    num_frames = asset.get_editor_property(
+                        "num_frames"
+                    ) or asset.get_editor_property("frame_count")
                 except Exception as exc:  # noqa: BLE001 - Unreal bridge safety
-                    return self._makeSkipped(
-                        asset_path, f"Could not read frame count: {exc}"
-                    )
+                    return self._makeSkipped(asset_path, f"Could not read frame count: {exc}")
 
             if num_frames is None or (isinstance(num_frames, int) and num_frames <= 0):
                 # Fallback: estimate from animation length
@@ -78,17 +80,15 @@ class AnimSequenceFrameCountRule(AbstractRule):
                     fps = 30.0  # Default FPS
                     num_frames = max(1, int(round(anim_length * fps)))
                 except Exception as exc:  # noqa: BLE001 - Unreal bridge safety
-                    return self._makeSkipped(
-                        asset_path, f"Could not estimate frame count: {exc}"
-                    )
+                    return self._makeSkipped(asset_path, f"Could not estimate frame count: {exc}")
 
             if num_frames > max_frames:
                 return self._makeResult(
                     asset_path,
                     passed=False,
                     message=(
-                        f"Animation sequence has {num_frames} frames — exceeds maximum of {max_frames}. "
-                        f"This may indicate an unnecessarily long animation."
+                        f"Animation sequence has {num_frames} frames — exceeds maximum of "
+                        f"{max_frames}. This may indicate an unnecessarily long animation."
                     ),
                     asset_class="AnimSequence",
                     fix_hint=f"Trim the animation to reduce frame count to {max_frames} or fewer.",
@@ -142,7 +142,9 @@ class AnimSequenceDurationLimitRule(AbstractRule):
         import unreal  # noqa: PLC0415 - deferred Unreal import
 
         if not isinstance(asset, unreal.AnimSequence):
-            return self._makeSkipped(asset_path, f"Not an AnimSequence (got {type(asset).__name__}).")
+            return self._makeSkipped(
+                asset_path, f"Not an AnimSequence (got {type(asset).__name__})."
+            )
 
         try:
             max_duration = self.config.get("max_anim_sequence_duration_seconds", 60.0)
@@ -151,7 +153,9 @@ class AnimSequenceDurationLimitRule(AbstractRule):
             anim_length = getattr(asset, "anim_length", None) or getattr(asset, "duration", None)
             if anim_length is None:
                 try:
-                    anim_length = asset.get_editor_property("anim_length") or asset.get_editor_property("duration")
+                    anim_length = asset.get_editor_property(
+                        "anim_length"
+                    ) or asset.get_editor_property("duration")
                 except Exception as exc:  # noqa: BLE001 - Unreal bridge safety
                     return self._makeSkipped(
                         asset_path, f"Could not read animation duration: {exc}"
@@ -173,8 +177,8 @@ class AnimSequenceDurationLimitRule(AbstractRule):
                     asset_path,
                     passed=False,
                     message=(
-                        f"Animation sequence has duration {anim_length:.1f}s — exceeds maximum of {max_duration}s. "
-                        f"This may cause pipeline issues."
+                        f"Animation sequence has duration {anim_length:.1f}s — exceeds maximum of "
+                        f"{max_duration}s. This may cause pipeline issues."
                     ),
                     asset_class="AnimSequence",
                     fix_hint=f"Trim or loop the animation to fit within {max_duration} seconds.",
@@ -183,7 +187,8 @@ class AnimSequenceDurationLimitRule(AbstractRule):
                 asset_path,
                 passed=True,
                 message=(
-                    f"Animation sequence has duration {anim_length:.1f}s — within limit of {max_duration}s."
+                    f"Animation sequence has duration {anim_length:.1f}s — within limit of "
+                    f"{max_duration}s."
                 ),
                 asset_class="AnimSequence",
             )

@@ -73,7 +73,8 @@ class AudioFileSizeRule(AbstractRule):
 
         Args:
             config (Config): Configuration instance with audio file size limits.
-            validation_context: Context for asset metadata collection. Defaults to FilesystemContext.
+            validation_context: Context for asset metadata collection. Defaults to
+                FilesystemContext.
 
         """
         super().__init__(config)
@@ -90,18 +91,14 @@ class AudioFileSizeRule(AbstractRule):
 
         """
         if not _is_audio_file(asset_path):
-            return self._makeSkipped(
-                asset_path, "Not an audio file (skipping size check)."
-            )
+            return self._makeSkipped(asset_path, "Not an audio file (skipping size check).")
 
         max_size_mb = _AUDIO_EXTENSIONS.get(os.path.splitext(asset_path)[1].lower(), 50)
 
         try:
             file_size_bytes = os.path.getsize(asset_path)
         except OSError as exc:
-            return self._makeSkipped(
-                asset_path, f"Cannot read file size: {exc}"
-            )
+            return self._makeSkipped(asset_path, f"Cannot read file size: {exc}")
 
         file_size_mb = file_size_bytes / (1024 * 1024)
 
@@ -157,7 +154,8 @@ class AudioValidExtensionRule(AbstractRule):
 
         Args:
             config (Config): Configuration instance with audio file size limits.
-            validation_context: Context for asset metadata collection. Defaults to FilesystemContext.
+            validation_context: Context for asset metadata collection. Defaults to
+                FilesystemContext.
 
         """
         super().__init__(config)
@@ -174,9 +172,7 @@ class AudioValidExtensionRule(AbstractRule):
 
         """
         if not _is_audio_file(asset_path):
-            return self._makeSkipped(
-                asset_path, "Not an audio file (skipping extension check)."
-            )
+            return self._makeSkipped(asset_path, "Not an audio file (skipping extension check).")
 
         ext = os.path.splitext(asset_path)[1].lower()
         approved = list(_AUDIO_EXTENSIONS.keys())
@@ -228,7 +224,8 @@ class AudioFilenameLengthRule(AbstractRule):
 
         Args:
             config (Config): Configuration instance with audio file size limits.
-            validation_context: Context for asset metadata collection. Defaults to FilesystemContext.
+            validation_context: Context for asset metadata collection. Defaults to
+                FilesystemContext.
 
         """
         super().__init__(config)
@@ -260,10 +257,7 @@ class AudioFilenameLengthRule(AbstractRule):
                 rule_name=self.name,
                 category=self.category,
                 severity=self.severity,
-                message=(
-                    f"Audio filename length {name_length} is within limit "
-                    f"of {max_length}."
-                ),
+                message=(f"Audio filename length {name_length} is within limit of {max_length}."),
                 passed=True,
             )
 

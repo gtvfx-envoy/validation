@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 class Severity(Enum):
     """Severity level for a validation failure.
 
@@ -29,6 +30,7 @@ class Severity(Enum):
     ERROR = "ERROR"
     WARNING = "WARNING"
     INFO = "INFO"
+
 
 @dataclass
 class ValidationResult:
@@ -78,6 +80,7 @@ class ValidationResult:
             f"         {self.message}{hint}"
         )
 
+
 class AbstractRule(ABC):
     """Abstract base class for all validation rules.
 
@@ -97,24 +100,32 @@ class AbstractRule(ABC):
     name: str = ""
     category: str = ""
     severity: Severity = Severity.ERROR
-    context: HostType | tuple[HostType, ...] | list[HostType] | None = None  # Type: HostType or tuple/list of HostTypes
+    context: HostType | tuple[HostType, ...] | list[HostType] | None = (
+        None  # Type: HostType or tuple/list of HostTypes
+    )
 
     def __init__(self, config: Config, validation_context=None) -> None:
         """Initialise the rule with config and optional validation context.
 
         Args:
             config: Layered Config object.
-            validation_context: A :class:`ValidationContext` instance (with ``.collect()``), or ``None`` to skip metadata checks.
-                If ``None``, the rule will use fallback logic that doesn't require asset metadata.
+            validation_context: A :class:`ValidationContext` instance (with ``.collect()``), or
+                ``None`` to skip metadata checks. If ``None``, the rule will use fallback logic
+                that doesn't require asset metadata.
 
         Note:
-            The framework's :class:`ValidationRunner` handles context injection automatically — rules do not need to call this directly.
+            The framework's :class:`ValidationRunner` handles context injection automatically —
+            rules do not need to call this directly.
 
         """
         self.config = config
         # Store validation_context separately from the class-level `context` attribute
         # to avoid shadowing the HostType requirement declared in the subclass
-        self._validation_context = validation_context if (validation_context is not None and hasattr(validation_context, 'collect')) else None
+        self._validation_context = (
+            validation_context
+            if (validation_context is not None and hasattr(validation_context, 'collect'))
+            else None
+        )
 
     def isEnabled(self) -> bool:
         """Return whether this rule is enabled in the current config and host.
@@ -147,7 +158,9 @@ class AbstractRule(ABC):
                     logger.debug(
                         "[Rule] %s skipped — context mismatch "
                         "(rule requires one of %r, current host is %r).",
-                        self.name, rule_ctx, current_host,
+                        self.name,
+                        rule_ctx,
+                        current_host,
                     )
                     return False
 
@@ -157,7 +170,9 @@ class AbstractRule(ABC):
                     logger.debug(
                         "[Rule] %s skipped — context mismatch "
                         "(rule requires %r, current host is %r).",
-                        self.name, rule_ctx, current_host,
+                        self.name,
+                        rule_ctx,
+                        current_host,
                     )
                     return False
 
@@ -165,7 +180,8 @@ class AbstractRule(ABC):
             else:
                 logger.warning(
                     "[Rule] %s has unsupported context type %r; allowing execution.",
-                    self.name, type(rule_ctx),
+                    self.name,
+                    type(rule_ctx),
                 )
         except Exception:  # noqa: BLE001 - runtime may not be available
             pass

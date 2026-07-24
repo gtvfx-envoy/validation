@@ -205,7 +205,11 @@ class TestBoundingBoxExtentRule(unittest.TestCase):
     def test_exceeds_limit(self) -> None:
         meta = AssetMetadata(
             path="/Game/MyMesh.uasset",
-            properties={"bounds_extent_x": 9999.0, "bounds_extent_y": 20.0, "bounds_extent_z": 15.0},
+            properties={
+                "bounds_extent_x": 9999.0,
+                "bounds_extent_y": 20.0,
+                "bounds_extent_z": 15.0,
+            },
         )
         rule = BoundingBoxExtentRule(self.config, validation_context=_FakeMetadataContext(meta))
         result = rule.validate("/Game/MyMesh.uasset")

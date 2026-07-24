@@ -55,7 +55,11 @@ class FileSizeRule(AbstractRule):
             )
 
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             return self._makeSkipped(
                 asset_path,
@@ -118,7 +122,11 @@ class ValidExtensionRule(AbstractRule):
             )
 
         try:
-            meta = self._validation_context.collect(asset_path) if self._validation_context is not None else None
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
         except (AttributeError, TypeError):
             return self._makeSkipped(
                 asset_path,

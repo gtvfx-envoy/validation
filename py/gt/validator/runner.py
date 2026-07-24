@@ -106,7 +106,10 @@ class ValidationRunner:
 
                 if current_host is not None:
                     context_groups = registry.getRulesWithContext()
-                    matching_rules = context_groups.get(current_host, []) + context_groups.get(None, [])
+                    matching_rules = (
+                        context_groups.get(current_host, [])
+                        + context_groups.get(None, [])
+                    )
                     # Deduplicate while preserving order
                     seen_names: set[str] = set()
                     filtered: list[type[AbstractRule]] = []

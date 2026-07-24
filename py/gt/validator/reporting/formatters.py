@@ -720,9 +720,14 @@ class SARIFFormatter:
           "version": "2.1.0",
           "runs": [{
             "tool": { "driver": { "name": "GT Asset Validator", "version": "..." } },
-            "results": [ { "ruleId": "...", "level": "error|warning|none",
-                           "message": { "text": "..." },
-                           "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "..." } } }] } ]
+            "results": [
+              {
+                "ruleId": "...",
+                "level": "error|warning|none",
+                "message": { "text": "..." },
+                "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "..." } } }]
+              }
+            ]
           }]
         }
 
@@ -970,7 +975,8 @@ class JUnitXMLFormatter:
         for suite_name, suite_results in suites.items():
             suite_failures = sum(1 for r in suite_results if not r.passed and not r.skipped)
             suite_errors = sum(
-                1 for r in suite_results if not r.passed and not r.skipped and r.severity == Severity.ERROR
+                1 for r in suite_results
+                if not r.passed and not r.skipped and r.severity == Severity.ERROR
             )
             suite_skipped = sum(1 for r in suite_results if r.skipped)
             suite_time = round(sum(r.duration_ms for r in suite_results) / 1000.0, 4)
