@@ -1,113 +1,112 @@
 """Tests for ValidationRunner context handling.
 
 This module contains tests for the ValidationRunner's context handling.
+Uses production rule classes via absolute imports.
 """
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parent.parent.parent  # goes to V:\repo\gtvfx-contrib\gt\validation
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import unittest
-from unittest.mock import Mock, patch
 
 from gt.runtime import HostType
 
-from ...config import Config
-from ..base import AbstractRule, Severity
-from ..registry import registry
-from ..runner import ValidationRunner
+from gt.validator.config import Config  # type: ignore
+from gt.validator.context.filesystem import FilesystemContext
+from gt.validator.registry import registry
+from gt.validator.rules.base import AbstractRule, Severity
+from gt.validator.runner import ValidationRunner
 
 
 class TestValidationRunnerContext(unittest.TestCase):
-    """Test ValidationRunner context handling."""
+    """Test ValidationRunner context handling.
+
+    These tests monkeypatch ``RuntimeDetector.getCurrentHost`` to return a
+    known value so the runner's context-filtering logic can be verified
+    deterministically regardless of what host detection finds in the test
+    environment (e.g. envoy may expose Krita/Unreal stubs that would
+    otherwise confuse the detector).
+    """
 
     def setUp(self) -> None:
-        """Clear the registry before each test."""
+        """Clear the registry and force STANDALONE host for each test."""
         registry.clear()
-        self.config = Mock()
-        self.config.get = Mock(return_value=True)
+        self.config = Config()  # Use defaults instead of Mock for production rules
+        self._host_patcher = patch(
+            "gt.runtime.RuntimeDetector.getCurrentHost",
+            return_value=HostType.STANDALONE,
+        )
+        self._host_patcher.start()
+
+    def tearDown(self) -> None:
+        """Stop the host-type monkeypatch."""
+        self._host_patcher.stop()
 
     def test_runner_gets_current_context(self) -> None:
-        """Test that ValidationRunner gets current context from gt.runtime."""
-
-        @registry.register
-        class TestRule(AbstractRule):
-            name = "test_rule"
-            category = "test"
-            severity = Severity.ERROR
-            context = HostType.UNREAL
-
-            def __init__(self, config: Config, context: HostType) -> None:
-                super().__init__(config)
-                self.context = context
-
-            def validate(self, asset_path: str) -> AbstractRule: ...
-
-        with patch('gt.runtime.getCurrentHost', return_value=HostType.UNREAL):
-            with patch('gt.runtime.HostType') as mock_host_type:
-                mock_host_type.UNREAL = HostType.UNREAL
-                runner = ValidationRunner(self.config)
-                self.assertEqual(runner.context, HostType.UNREAL)
+        """ValidationRunner auto-detects a ValidationContext when none is given."""
+        runner = ValidationRunner(self.config)
+        # No context was passed explicitly, so ContextFactory should have
+        # selected FilesystemContext (the standalone default).
+        self.assertIsInstance(runner.context, FilesystemContext)
 
     def test_runner_passes_context_to_rules(self) -> None:
-        """Test that ValidationRunner passes context to rules during instantiation."""
+        """ValidationRunner passes its context down to rule instances."""
 
         @registry.register
-        class TestRule(AbstractRule):
-            name = "test_rule"
+        class SampleStandaloneRule(AbstractRule):
+            name = "sample_standalone_rule"
             category = "test"
             severity = Severity.ERROR
-            context = HostType.UNREAL
+            context = HostType.STANDALONE
 
-            def __init__(self, config: Config, context: HostType) -> None:
-                super().__init__(config)
-                self.context = context
-
-            def validate(self, asset_path: str) -> AbstractRule: ...
+            def validate(self, asset_path: str):  # noqa: D102
+                return self._makeResult(asset_path, passed=True, message="ok")
 
         registry.discover()
         runner = ValidationRunner(self.config)
 
-        # Check that the rule was instantiated with the correct context
-        self.assertEqual(len(runner.rules), 1)
-        self.assertEqual(runner.rules[0].context, HostType.UNREAL)
+        matching = [r for r in runner.rules if r.name == "sample_standalone_rule"]
+        self.assertEqual(len(matching), 1)
+        # The rule should have received the runner's own context instance.
+        self.assertIs(matching[0]._validation_context, runner.context)
 
     def test_runner_filters_rules_by_context(self) -> None:
-        """Test that ValidationRunner filters rules by context."""
+        """ValidationRunner only instantiates rules matching the current host."""
 
         @registry.register
-        class UnrealRule(AbstractRule):
-            name = "unreal_rule"
+        class SampleUnrealOnlyRule(AbstractRule):
+            name = "sample_unreal_only_rule"
             category = "unreal"
             severity = Severity.ERROR
             context = HostType.UNREAL
 
-            def __init__(self, config: Config, context: HostType) -> None:
-                super().__init__(config)
-                self.context = context
-
-            def validate(self, asset_path: str) -> AbstractRule: ...
+            def validate(self, asset_path: str):  # noqa: D102
+                return self._makeResult(asset_path, passed=True, message="ok")
 
         @registry.register
-        class StandaloneRule(AbstractRule):
-            name = "standalone_rule"
+        class SampleStandaloneOnlyRule(AbstractRule):
+            name = "sample_standalone_only_rule"
             category = "standalone"
             severity = Severity.ERROR
             context = HostType.STANDALONE
 
-            def __init__(self, config: Config, context: HostType) -> None:
-                super().__init__(config)
-                self.context = context
-
-            def validate(self, asset_path: str) -> AbstractRule: ...
+            def validate(self, asset_path: str):  # noqa: D102
+                return self._makeResult(asset_path, passed=True, message="ok")
 
         registry.discover()
-
-        # Test with UNREAL context
         runner = ValidationRunner(self.config)
-        self.assertEqual(len(runner.rules), 2)
 
-        # Test with STANDALONE context
-        runner_standalone = ValidationRunner(self.config)
-        self.assertEqual(len(runner_standalone.rules), 2)
+        active_names = {r.name for r in runner.rules}
+        # Only the STANDALONE-context rule should be active in this environment.
+        self.assertIn("sample_standalone_only_rule", active_names)
+        self.assertNotIn("sample_unreal_only_rule", active_names)
 
 
 if __name__ == "__main__":

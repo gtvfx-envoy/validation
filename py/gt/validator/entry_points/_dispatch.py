@@ -14,8 +14,9 @@ This script then runs inside the Editor, restores the original argv, and calls
 full Unreal Python API available for introspection rules.
 
 Environment variables read:
-    VALIDATOR_SESSION_DIR    — filesystem path to the session root, used to put
-                               the validator package on sys.path
+    VALIDATOR_SESSION_DIR    — filesystem path to the `py` namespace-package
+                               root, added to sys.path so `gt.validator`
+                               resolves inside the Unreal Editor's Python.
     VALIDATOR_DISPATCH_ARGV  — JSON-encoded list of CLI arguments forwarded from
                                the parent process
 
@@ -32,9 +33,11 @@ from pathlib import Path
 # ── Log file setup ────────────────────────────────────────────────────────── #
 # Unreal closes immediately on exception.  Write all output to a log file so
 # errors are visible after the window closes.
+# Three levels up from _dispatch.py (.../py/gt/validator/entry_points/_dispatch.py)
+# is .../py — the namespace-package root (matches cli.py's VALIDATOR_SESSION_DIR).
 _session_dir_early = os.environ.get(
     "VALIDATOR_SESSION_DIR",
-    str(Path(__file__).resolve().parents[2]),
+    str(Path(__file__).resolve().parents[3]),
 )
 _log_path = Path(_session_dir_early) / "artifacts" / "_dispatch.log"
 _log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -51,11 +54,12 @@ _log(f"[dispatch] Starting — log: {_log_path}")
 
 try:
     # ── Path setup ────────────────────────────────────────────────────────── #
-    # The parent cli.py sets VALIDATOR_SESSION_DIR to the session root so the
-    # correct validator package is loaded regardless of Unreal's working directory.
+    # The parent cli.py sets VALIDATOR_SESSION_DIR to the `py` namespace-package
+    # root so the correct gt.validator package is loaded regardless of Unreal's
+    # working directory.
     _session_dir = os.environ.get(
         "VALIDATOR_SESSION_DIR",
-        str(Path(__file__).resolve().parents[2]),
+        str(Path(__file__).resolve().parents[3]),
     )
     if _session_dir not in sys.path:
         sys.path.insert(0, _session_dir)
@@ -63,12 +67,13 @@ try:
 
     # ── Module cache cleanup ───────────────────────────────────────────────── #
     # Unreal's Python interpreter persists between script executions.  Purge any
-    # previously loaded validator package so this session's version loads cleanly.
-    for _k in [k for k in sys.modules if k == "validator" or k.startswith("validator.")]:
+    # previously loaded gt.validator package so this session's version loads
+    # cleanly (gt.runtime is left alone — it does not change between runs).
+    for _k in [k for k in sys.modules if k == "gt.validator" or k.startswith("gt.validator.")]:
         del sys.modules[_k]
 
     # ── Unreal guard ─────────────────────────────────────────────────────── #
-    from validator.env import HAS_UNREAL  # noqa: E402
+    from gt.validator.env import HAS_UNREAL  # noqa: E402
 
     if not HAS_UNREAL:
         raise RuntimeError(
@@ -80,7 +85,7 @@ try:
     _log("[dispatch] Unreal environment detected.")
 
     # ── Restore original argv and delegate to cli.main() ─────────────────── #
-    from validator.cli import main  # noqa: E402
+    from gt.validator.cli import main  # noqa: E402
 
     _raw = os.environ.get("VALIDATOR_DISPATCH_ARGV")
     if _raw:

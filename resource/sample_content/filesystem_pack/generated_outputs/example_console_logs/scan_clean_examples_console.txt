@@ -1,0 +1,3 @@
+[INFO] Scan root: clean_examples/project_aurora
+[INFO] Files scanned: 21
+[INFO] No validation issues found.

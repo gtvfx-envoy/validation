@@ -59,6 +59,14 @@ DEFAULTS: dict[str, Any] = {
     "show_passing": False,
     "max_workers": 0,  # 0 means use CPU count
     "output_format": "console",
+    # SkeletalMesh rules
+    "max_skeletal_mesh_bone_count": 256,
+    "max_animation_duration_seconds": 60.0,
+    # CollisionProfile rules
+    "max_collision_profile_complexity": 32,
+    "max_lod_scale_jump": 0.5,
+    # AnimSequence rules
+    "max_anim_sequence_frame_count": 1800,
 }
 
 
@@ -90,6 +98,14 @@ CONFIG_SCHEMA: dict[str, type | tuple] = {
     "show_passing": bool,
     "max_workers": int,
     "output_format": str,
+    # SkeletalMesh rules
+    "max_skeletal_mesh_bone_count": int,
+    "max_animation_duration_seconds": float,
+    # CollisionProfile rules
+    "max_collision_profile_complexity": int,
+    "max_lod_scale_jump": (int, float),
+    # AnimSequence rules
+    "max_anim_sequence_frame_count": int,
 }
 
 

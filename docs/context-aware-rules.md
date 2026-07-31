@@ -2,129 +2,126 @@
 
 ## Overview
 
-The validation framework now supports context-aware rules that automatically filter based on the current runtime environment (Unreal, Maya, Max, Houdini, Blender, Krita, or Standalone).
+The validation framework supports context-aware rules that automatically filter based on the current runtime environment (Unreal, Maya, Max, Houdini, Blender, Krita, or Standalone). Rules declare their supported host type(s) via a class-level `context` attribute, and the runner only instantiates matching rules for the detected host.
 
-## Key Changes
+## Writing a Context-Aware Rule
 
-### 1. Context-Aware Rules
-
-Rules now require a `context` attribute that specifies which host type they support:
+### Single-Host Rule (Unreal-only)
 
 ```python
 from gt.runtime import HostType
 from .base import AbstractRule, Severity
 from ..registry import registry
 
+
 @registry.register
-class MyRule(AbstractRule):
-    name = "my_rule"
+class MyUnrealRule(AbstractRule):
+    """A rule that only runs inside Unreal Engine.
+
+    The ``context`` class attribute tells the runner to skip this rule
+    in standalone or other host environments.
+
+    """
+
+    name = "my_unreal_rule"
     category = "my_category"
     severity = Severity.ERROR
-    context = HostType.UNREAL  # Required: only runs in Unreal
-
-    def __init__(self, config: "Config", context: HostType) -> None:
-        super().__init__(config)
-        self.context = context
+    context = HostType.UNREAL  # Only runs when host is Unreal
 
     def validate(self, asset_path: str) -> ValidationResult:
-        # Context is guaranteed to be HostType.UNREAL
-        # No more try/except blocks needed
+        # self._validation_context is guaranteed to be an UnrealContext here
         ...
 ```
 
-### 2. Registry Filtering
-
-The registry automatically filters rules based on the current context:
+### Multi-Host Rule (runs in multiple environments)
 
 ```python
-# Get all rules for the current context
+from gt.runtime import HostType
+from .base import AbstractRule, Severity
+from ..registry import registry
+
+
+@registry.register
+class MyCrossHostRule(AbstractRule):
+    """A rule that runs in both Unreal and Krita."""
+
+    name = "my_cross_host_rule"
+    category = "my_category"
+    severity = Severity.WARNING
+    context = (HostType.UNREAL, HostType.KRITA)  # Tuple of supported hosts
+
+    def validate(self, asset_path: str) -> ValidationResult:
+        ...
+```
+
+### Standalone-Only Rule
+
+```python
+from gt.runtime import HostType
+from .base import AbstractRule, Severity
+from ..registry import registry
+
+
+@registry.register
+class MyStandaloneRule(AbstractRule):
+    """A rule that only runs in standalone Python."""
+
+    name = "my_standalone_rule"
+    category = "filesystem"
+    severity = Severity.INFO
+    context = HostType.STANDALONE
+
+    def validate(self, asset_path: str) -> ValidationResult:
+        ...
+```
+
+### No-Host Rule (runs everywhere)
+
+If you omit the `context` attribute entirely, the rule runs in every host environment. This is useful for filesystem-level checks that don't depend on any host-specific API.
+
+## How Context Filtering Works
+
+The ``RuleRegistry`` filters rules by their declared context when the runner requests them:
+
+```python
+# Get all rules for a specific host
 rules = registry.getRules(context=HostType.UNREAL)
 
 # Get all rules (no filter)
 all_rules = registry.getRules()
 ```
 
-### 3. Automatic Context Detection
-
-The framework automatically detects the current host and passes it to rules:
-
-```python
-# In ValidationRunner.__init__
-from gt.runtime import HostType
-current_context = HostType.UNREAL
-self.rules = [R(config, context=current_context) for R in rule_classes]
-```
+The ``ValidationRunner`` detects the current host via ``RuntimeDetector.getCurrentHost()`` and instantiates only matching rule classes. Rules whose `context` doesn't match the current host are silently skipped — they never run, so there's no need for try/except guards inside individual rules.
 
 ## HostType Enum
 
-The `HostType` enum defines all supported host types:
+| Value | Description |
+|---|---|
+| `HostType.STANDALONE` | Standalone Python (no DCC application) |
+| `HostType.UNREAL` | Unreal Engine |
+| `HostType.MAYA` | Autodesk Maya |
+| `HostType.MAX` | Autodesk 3ds Max |
+| `HostType.HOUDINI` | SideFX Houdini |
+| `HostType.BLENDER` | Blender |
+| `HostType.KRITA` | Krita |
 
-- `HostType.STANDALONE` - Standalone Python
-- `HostType.UNREAL` - Unreal Engine
-- `HostType.MAYA` - Autodesk Maya
-- `HostType.MAX` - Autodesk 3ds Max
-- `HostType.HOUDINI` - SideFX Houdini
-- `HostType.BLENDER` - Blender
-- `HostType.KRITA` - Krita
+## Accessing Asset Metadata
 
-## Migration Guide
-
-### Before (Fragile Context Detection)
-
-```python
-from ..env import HAS_UNREAL, loadUnrealAsset
-from ..registry import registry
-
-@registry.register
-class MyRule(AbstractRule):
-    name = "my_rule"
-    category = "my_category"
-    severity = Severity.ERROR
-
-    def validate(self, asset_path: str) -> ValidationResult:
-        # Fragile try/except blocks
-        try:
-            if not HAS_UNREAL:
-                return self._makeSkipped(asset_path, "Unreal not available")
-            
-            asset = loadUnrealAsset(asset_path)
-        except UnrealAPIError:
-            return self._makeSkipped(asset_path, "Failed to load asset")
-        
-        # ... validation logic
-```
-
-### After (Context-Aware)
+Rules receive a ``ValidationContext`` instance injected by the runner. The context provides host-specific asset metadata through its ``collect()`` method:
 
 ```python
-from gt.runtime import HostType
-from ..registry import registry
-
-@registry.register
-class MyRule(AbstractRule):
-    name = "my_rule"
-    category = "my_category"
-    severity = Severity.ERROR
-    context = HostType.UNREAL  # Required
-
-    def __init__(self, config: "Config", context: HostType) -> None:
-        super().__init__(config)
-        self.context = context
-
-    def validate(self, asset_path: str) -> ValidationResult:
-        # Context is guaranteed to be HostType.UNREAL
-        # No more try/except needed
-        asset = loadUnrealAsset(asset_path)
-        # ... validation logic
+def validate(self, asset_path: str) -> ValidationResult:
+    meta = self._validation_context.collect(asset_path)
+    if meta is None:
+        return self._makeSkipped(asset_path, "Metadata unavailable")
+    
+    # Access host-specific properties via meta.properties dict
+    width = meta.properties.get("width")
+    height = meta.properties.get("height")
+    ...
 ```
 
-## Benefits
-
-1. **No More Fragile Context Detection**: Rules no longer need try/except blocks
-2. **Type Safety**: `HostType` enum provides compile-time safety
-3. **Better Separation of Concerns**: Registry handles context filtering
-4. **Easier Testing**: Context can be mocked in tests
-5. **Future-Proof**: Easy to add new host types
+The ``ValidationContext`` base class provides a default ``collect()`` that returns ``None``. Host-specific subclasses (``UnrealContext``, ``FilesystemContext``, etc.) override this to return meaningful metadata. Rules should always check for ``None`` and skip gracefully when metadata is unavailable.
 
 ## Registry API
 
@@ -134,122 +131,131 @@ class MyRule(AbstractRule):
 def getRules(
     category: str | None = None,
     severity=None,
-    context: HostType | None = None,
-) -> list[Type]:
+    context=None,
+) -> list[type]:
     """Return registered rule classes, optionally filtered.
 
     Args:
         category: If provided, only rules with this category are returned.
         severity: If provided, only rules with this severity are returned.
-        context: If provided, only rules with this context are returned.
+        context: If provided, only rules with this context (or multi-context
+            rules that include it) are returned. Rules without an explicit
+            ``context`` attribute match any filter.
 
     Returns:
         A list of rule classes matching the given filters.
     """
 ```
 
-### Context Filtering
+### getRulesWithContext()
+
+Groups registered rules by their declared context for efficient lookup:
 
 ```python
-# Filter by context
-unreal_rules = registry.getRules(context=HostType.UNREAL)
-maya_rules = registry.getRules(context=HostType.MAYA)
-
-# No filter (all rules)
-all_rules = registry.getRules()
-
-# Filter by category and context
-unreal_naming_rules = registry.getRules(
-    category="naming",
-    context=HostType.UNREAL
-)
+groups = registry.getRulesWithContext()
+# {HostType.UNREAL: [...], HostType.STANDALONE: [...], None: [...]}
 ```
 
 ## ValidationRunner
 
-The `ValidationRunner` automatically gets the current context and passes it to rules:
+The ``ValidationRunner`` handles host detection and rule instantiation automatically:
 
 ```python
-from gt.runtime import HostType
-from .runner import ValidationRunner
+from gt.validator.runner import ValidationRunner
+from gt.validator.config import Config
 
-# Get current context
-current_context = HostType.UNREAL
+config = Config()
+runner = ValidationRunner(config, max_workers=4)
 
-# Create runner (context is automatically passed to rules)
-runner = ValidationRunner(
-    config,
-    category="texture",
-    severity=Severity.ERROR,
-    max_workers=4
-)
+# runner.rules contains only rules matching the current host
+for rule in runner.rules:
+    print(f"{rule.name} (enabled={rule.isEnabled()})")
+
+report = runner.validateAssets(["/Game/MyAsset.uasset"])
 ```
 
-## Testing
+## Testing Rules
 
-### Unit Tests
+### Unit Test with Mock Context
 
 ```python
 import unittest
-from unittest.mock import Mock
+from unittest.mock import patch
 from gt.runtime import HostType
-from .base import AbstractRule
-from .registry import registry
+from .base import AbstractRule, ValidationResult
 
-class TestContextAwareRules(unittest.TestCase):
+
+class _FakeContext:
+    """Minimal context mock for unit tests."""
+    
+    def collect(self, path):
+        return None  # Skip when metadata unavailable
+
+
+class TestMyRule(unittest.TestCase):
     def setUp(self) -> None:
-        registry.clear()
-        self.config = Mock()
-        self.config.get = Mock(return_value=True)
+        self.config = Config()
+        self.context = _FakeContext()
 
-    def test_rule_with_context(self) -> None:
-        @registry.register
-        class TestRule(AbstractRule):
-            name = "test_rule"
-            category = "test"
-            severity = Severity.ERROR
-            context = HostType.UNREAL
-
-            def __init__(self, config: "Config", context: HostType) -> None:
-                super().__init__(config)
-                self.context = context
-
-            def validate(self, asset_path: str) -> AbstractRule:
-                ...
-
-        registry.discover()
-        rule = TestRule(self.config, HostType.UNREAL)
-        self.assertEqual(rule.context, HostType.UNREAL)
+    @patch("gt.runtime.RuntimeDetector.getCurrentHost", return_value=HostType.UNREAL)
+    def test_rule_runs_in_unreal(self, mock_host):
+        rule = MyUnrealRule(self.config, validation_context=self.context)
+        result = rule.validate("/Game/MyAsset.uasset")
+        self.assertIsInstance(result, ValidationResult)
 ```
 
-## Migration Checklist
+### Test Skipping Behavior
 
-- [ ] Add `context` attribute to all rules
-- [ ] Update `__init__` method to accept `context` parameter
-- [ ] Remove try/except blocks from rules
-- [ ] Remove `import unreal` statements (no longer needed)
-- [ ] Update docstrings to reflect context requirement
-- [ ] Test rules in different environments (standalone, Unreal, Maya, etc.)
+Rules that declare a host-specific context are automatically skipped when running in the wrong environment. You can verify this:
+
+```python
+def test_skips_outside_unreal(self) -> None:
+    rule = MyUnrealRule(self.config, validation_context=self.context)
+    self.assertFalse(rule.isEnabled())  # STANDALONE != UNREAL
+```
+
+## Output Formatters
+
+The framework includes five output formatters:
+
+| Format | Class | Extension | Use Case |
+|---|---|---|---|
+| Console | ``ConsoleFormatter`` | N/A (stdout) | Interactive terminal use with ANSI colors |
+| JSON | ``JSONFormatter`` | `.json` | Machine-readable, dashboards, custom processing |
+| HTML | ``HTMLFormatter`` | `.html` | Self-contained single-file report with CSS |
+| SARIF | ``SARIFFormatter`` | `.sarif.json` | OASIS standard for CI/CD (GitHub, Azure DevOps) |
+| JUnit XML | ``JUnitXMLFormatter`` | `.xml` | Jenkins, GitLab CI, GitHub Actions test reports |
+
+Select a formatter via the `--format` CLI flag or the `VALIDATOR_FORMAT` environment variable:
+
+```bash
+en validate --directory /Game/ --format sarif --output-dir ./reports
+```
 
 ## Troubleshooting
 
 ### Rule Not Running
 
-If a rule is not running, check:
-1. Does the rule have a `context` attribute?
-2. Is the `context` value correct for the current environment?
-3. Is the registry filtering by context?
+1. Check that the rule has a ``context`` class attribute matching the current host.
+2. Verify with ``en validate --list-rules`` to see which rules are active.
+3. Rules without a ``context`` attribute run in all hosts — if this is unintended, add one.
+
+### Metadata Unavailable
+
+If ``self._validation_context.collect()`` returns ``None``, the rule should skip gracefully:
+
+```python
+meta = self._validation_context.collect(asset_path)
+if meta is None:
+    return self._makeSkipped(asset_path, "Metadata unavailable for this asset type")
+```
 
 ### Context Not Set
 
-If you get a `TypeError` about missing `context` parameter:
-1. Ensure the rule has a `context` attribute
-2. Verify the `__init__` method accepts `context` as a parameter
-3. Check that the registry is passing context to rules
+If you get a ``TypeError`` about missing ``validation_context`` parameter, ensure the rule's ``__init__`` accepts it:
 
-## Future Enhancements
-
-- [ ] Add support for multiple contexts per rule
-- [ ] Add context-based enable/disable configuration
-- [ ] Add context-aware logging
-- [ ] Add context-based performance monitoring
+```python
+def __init__(self, config: Config, validation_context=None) -> None:
+    super().__init__(config)
+    self._validation_context = validation_context or FilesystemContext()
+```

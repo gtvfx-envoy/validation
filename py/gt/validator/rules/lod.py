@@ -8,6 +8,8 @@ Rules:
 
 from __future__ import annotations
 
+from gt.runtime import HostType
+
 from ..env import loadUnrealAsset
 from ..errors import UnrealAPIError
 from ..registry import registry
@@ -63,12 +65,14 @@ class LODCountRule(AbstractRule):
         name: Rule identifier ``"lod_count"``.
         category: Rule category ``"lod"``.
         severity: :attr:`Severity.ERROR`.
+        context: Requires Unreal Engine (HostType.UNREAL).
 
     """
 
     name = "lod_count"
     category = "lod"
     severity = Severity.ERROR
+    context = HostType.UNREAL
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the LOD count of the given mesh asset.
@@ -137,12 +141,14 @@ class LODScreenSizeRatioRule(AbstractRule):
         name: Rule identifier ``"lod_screen_size_ratio"``.
         category: Rule category ``"lod"``.
         severity: :attr:`Severity.WARNING`.
+        context: Requires Unreal Engine (HostType.UNREAL).
 
     """
 
     name = "lod_screen_size_ratio"
     category = "lod"
     severity = Severity.WARNING
+    context = HostType.UNREAL
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate that LOD screen size thresholds decrease monotonically.

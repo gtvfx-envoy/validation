@@ -59,7 +59,9 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 # Missing-docstring rules are noisy for test modules.
-"**/tests/**" = ["D"]
+"**/tests/**" = ["D", "E402"]
+# Test files intentionally use sys.path.insert before imports to enable
+# testing without installation — E402 is expected and suppressed here.
 
 [tool.ruff.format]
 quote-style = "preserve"

@@ -35,15 +35,20 @@ class FilesystemContext(ValidationContext):
             files.
 
         """
-        name = os.path.basename(asset_path)
-        _, ext = os.path.splitext(name)
+        basename = os.path.basename(asset_path)
+        # `name` is the stem (no extension), matching UnrealContext's
+        # contract where `asset_name` never includes an extension. Rules
+        # such as NamingConventionRule rely on `meta.name` already being a
+        # stem (e.g. for regex matching); keeping the extension here would
+        # make every naming-pattern check on real files fail on the dot.
+        stem, ext = os.path.splitext(basename)
         size = 0
         if os.path.isfile(asset_path):
             size = os.path.getsize(asset_path)
 
         return AssetMetadata(
             path=asset_path,
-            name=name,
+            name=stem,
             extension=ext.lower(),
             size_bytes=size,
             asset_class="",

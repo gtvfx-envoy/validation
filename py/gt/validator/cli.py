@@ -30,7 +30,13 @@ import sys
 
 from .config import Config
 from .env import HAS_UNREAL
-from .reporting.formatters import ConsoleFormatter, HTMLFormatter, JSONFormatter
+from .reporting.formatters import (
+    ConsoleFormatter,
+    HTMLFormatter,
+    JSONFormatter,
+    JUnitXMLFormatter,
+    SARIFFormatter,
+)
 from .reporting.models import ValidationReport
 from .rules.base import Severity
 from .runner import ValidationRunner
@@ -41,6 +47,8 @@ _FORMATTERS = {
     "console": ConsoleFormatter,
     "json": JSONFormatter,
     "html": HTMLFormatter,
+    "sarif": SARIFFormatter,
+    "junit": JUnitXMLFormatter,
 }
 
 
@@ -180,7 +188,10 @@ def _dispatchToUnreal(argv: list[str]) -> int:
 
     env = os.environ.copy()
     env["VALIDATOR_DISPATCH_ARGV"] = json.dumps(argv)
-    env["VALIDATOR_SESSION_DIR"] = str(Path(__file__).parents[1])
+    # Two levels up from cli.py (.../py/gt/validator/cli.py) is .../py — the
+    # namespace-package root that must be on sys.path for `gt.validator` to
+    # resolve inside the Unreal Editor's Python interpreter.
+    env["VALIDATOR_SESSION_DIR"] = str(Path(__file__).parents[2])
     env.setdefault("VALIDATOR_MAX_WORKERS", "1")  # Unreal thread safety default
 
     print("[CLI] Dispatching to Unreal Editor...")
@@ -258,7 +269,7 @@ def buildParser() -> argparse.ArgumentParser:
         epilog="""
 environment variable overrides (all optional):
   VALIDATOR_CONFIG_PATH     — path to JSON config file
-  VALIDATOR_FORMAT          — output format: console | json | html
+  VALIDATOR_FORMAT          — output format: console | json | html | sarif | junit
   VALIDATOR_OUTPUT_DIR      — directory to write report file
   VALIDATOR_LOG_LEVEL       — logging verbosity: DEBUG | INFO | WARNING | ERROR
   VALIDATOR_MAX_WORKERS     — number of parallel worker threads (1 = serial)
@@ -294,7 +305,7 @@ exit codes:
     parser.add_argument(
         "--format",
         "-f",
-        choices=["console", "json", "html"],
+            choices=["console", "json", "html", "sarif", "junit"],
         default=None,
         help="Output format (default: console, or VALIDATOR_FORMAT env var).",
     )
@@ -378,6 +389,20 @@ def main(argv: list[str] | None = None) -> int:
 
     """
     import logging
+
+    # ConsoleFormatter and --list-rules output use box-drawing and status
+    # glyphs (━, ✓, ✗, ↷, …). On Windows, stdout/stderr are not guaranteed to
+    # be UTF-8 (e.g. legacy cp1252 console codepage, or a pipe/redirect with
+    # no encoding hint) — encoding those glyphs then raises
+    # UnicodeEncodeError ("'charmap' codec can't encode character..."),
+    # which the broad except below reports as a generic CLI error. Force
+    # UTF-8 with a safe fallback so report output never crashes the CLI
+    # regardless of the host console's codepage.
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # Non-reconfigurable stream (e.g. captured in tests) — ignore.
 
     # Normalise early so _dispatchToUnreal can forward the real argv.
     if argv is None:
@@ -466,7 +491,12 @@ def main(argv: list[str] | None = None) -> int:
 
         if output_dir and fmt != "console":
             os.makedirs(output_dir, exist_ok=True)
-            ext = {"json": ".json", "html": ".html"}.get(fmt, ".txt")
+            ext = {
+                "json": ".json",
+                "html": ".html",
+                "sarif": ".sarif.json",
+                "junit": ".xml",
+            }.get(fmt, ".txt")
             from datetime import datetime
 
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")

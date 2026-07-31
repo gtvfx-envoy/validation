@@ -1,0 +1,36 @@
+{
+  "scan_root": "flawed_examples/project_aurora",
+  "files_scanned": 31,
+  "results": [
+    {
+      "severity": "error",
+      "rule_id": "INVALID_NAME",
+      "path": "characters/Knight Final/geo/KnightBody.fbx",
+      "message": "File name does not match approved pattern."
+    },
+    {
+      "severity": "error",
+      "rule_id": "FORBIDDEN_EXTENSION",
+      "path": "characters/Knight Final/geo/chr_knight_sword_v001.max",
+      "message": "Extension .max is not allowed."
+    },
+    {
+      "severity": "error",
+      "rule_id": "EMPTY_FILE",
+      "path": "characters/Knight Final/textures/empty_texture.png",
+      "message": "File size is zero bytes."
+    },
+    {
+      "severity": "warning",
+      "rule_id": "BANNED_TERM",
+      "path": "props/prp_lantern/geo/prp_lantern_final_final2.fbx",
+      "message": "Name contains banned term: final."
+    },
+    {
+      "severity": "warning",
+      "rule_id": "FORBIDDEN_FOLDER",
+      "path": "environments/env_forest_clearing/temp/test_export.fbx",
+      "message": "Path contains forbidden folder: temp."
+    }
+  ]
+}

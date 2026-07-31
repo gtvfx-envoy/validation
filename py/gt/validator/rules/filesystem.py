@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import os
 
+from gt.runtime import HostType
+
 from ..registry import registry
 from .base import AbstractRule, Severity, ValidationResult
 
@@ -22,12 +24,14 @@ class FileSizeRule(AbstractRule):
         name: Rule identifier ``"file_size"``.
         category: Rule category ``"filesystem"``.
         severity: :attr:`Severity.ERROR`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "file_size"
     category = "filesystem"
     severity = Severity.ERROR
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the file size for the given asset.
@@ -42,7 +46,7 @@ class FileSizeRule(AbstractRule):
         """
         max_mb: float = self.config.get("max_file_size_mb", 50)
 
-        # Filesystem size check requires a real disk path.
+        # Use context to collect metadata instead of direct filesystem access.
         if not os.path.exists(asset_path):
             return self._makeSkipped(
                 asset_path,
@@ -50,8 +54,19 @@ class FileSizeRule(AbstractRule):
                 "File size is managed by Unreal when running inside the Editor.",
             )
 
-        size_bytes = os.path.getsize(asset_path)
-        size_mb = size_bytes / (1024 * 1024)
+        try:
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
+        except (AttributeError, TypeError):
+            return self._makeSkipped(
+                asset_path,
+                "FileSizeRule skipped: unable to collect metadata from context.",
+            )
+
+        size_mb = meta.sizeMb if meta else 0.0
 
         if size_mb > max_mb:
             return self._makeResult(
@@ -78,12 +93,14 @@ class ValidExtensionRule(AbstractRule):
         name: Rule identifier ``"valid_extension"``.
         category: Rule category ``"filesystem"``.
         severity: :attr:`Severity.ERROR`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "valid_extension"
     category = "filesystem"
     severity = Severity.ERROR
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the file extension for the given asset.
@@ -96,17 +113,27 @@ class ValidExtensionRule(AbstractRule):
             approved list.  Skipped for non-filesystem paths.
 
         """
-        _, ext = os.path.splitext(asset_path)
-        ext = ext.lower()
-
-        # Extension check on Unreal content paths is not meaningful —
-        # all .uasset files have the same extension on disk.
+        # Use context to collect metadata instead of direct filesystem access.
         if not os.path.exists(asset_path):
             return self._makeSkipped(
                 asset_path,
                 "ValidExtensionRule skipped: not a filesystem path. "
                 "Asset type is available via AssetData.asset_class in Unreal.",
             )
+
+        try:
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
+        except (AttributeError, TypeError):
+            return self._makeSkipped(
+                asset_path,
+                "ValidExtensionRule skipped: unable to collect metadata from context.",
+            )
+
+        ext = meta.extension if meta else ""
 
         valid_exts: list = self.config.get(
             "valid_extensions", [".uasset", ".fbx", ".png", ".tga", ".exr"]

@@ -16,9 +16,10 @@ import os
 import time
 from collections.abc import Callable, Iterator
 
-from gt.runtime import HostType
-
+from .allowlist import AllowlistManager
 from .config import Config
+from .context.base import ValidationContext
+from .context_factory import ContextFactory
 from .registry import registry
 from .reporting.models import ValidationReport
 from .rules.base import AbstractRule, Severity, ValidationResult
@@ -41,8 +42,8 @@ class ValidationRunner:
         category: str | None = None,
         severity: Severity | None = None,
         rules: list[type[AbstractRule]] | None = None,
-        context=None,
-        allowlist=None,
+        context: ValidationContext | None = None,
+        allowlist: AllowlistManager | None = None,
         max_workers: int | None = None,
     ) -> None:
         """Initialise the runner with configuration and optional filters.
@@ -52,7 +53,9 @@ class ValidationRunner:
             category: Optional string filter — only rules in this category run.
             severity: Optional Severity filter.
             rules: Explicit list of rule classes — bypasses registry lookup.
-            context: Optional ValidationContext instance (reserved for future use).
+            context: Optional ValidationContext instance to use for asset metadata.
+                If ``None``, the runner auto-detects the appropriate context based
+                on the current host type (Unreal or standalone) via ContextFactory.
             allowlist: Optional AllowlistManager instance.
             max_workers: Number of worker threads.  ``1`` = serial (safe in
                 Unreal).  Default: ``VALIDATOR_MAX_WORKERS`` env var or CPU count.
@@ -61,7 +64,7 @@ class ValidationRunner:
         self.config = config
         self.category = category
         self.severity = severity
-        self.rules = rules
+        self.rules = rules or []
         self.context = context
         self.allowlist = allowlist
 
@@ -75,7 +78,7 @@ class ValidationRunner:
 
         # Discover and instantiate rules
         try:
-            if rules is not None:
+            if rules:
                 self.rules = [R(config) for R in rules]
             else:
                 registry.discover()
@@ -88,9 +91,37 @@ class ValidationRunner:
                         severity,
                         list(registry.listRules().keys()),
                     )
-                # Get current context for context-aware rules
-                current_context = HostType.UNREAL if context is None else context
-                self.rules = [R(config, context=current_context) for R in rule_classes]
+                # Auto-detect the appropriate context using ContextFactory.
+                if self.context is None:
+                    factory = ContextFactory.get_instance()
+                    self.context = factory.get_context()
+
+                # Filter rules by their declared context to match the current host.
+                from gt.runtime import RuntimeDetector as _RuntimeDetector
+
+                try:
+                    current_host = _RuntimeDetector.getCurrentHost()
+                except Exception:  # noqa: BLE001 - runtime may not be available
+                    current_host = None
+
+                if current_host is not None:
+                    context_groups = registry.getRulesWithContext()
+                    matching_rules = (
+                        context_groups.get(current_host, [])
+                        + context_groups.get(None, [])
+                    )
+                    # Deduplicate while preserving order
+                    seen_names: set[str] = set()
+                    filtered: list[type[AbstractRule]] = []
+                    for r in matching_rules:
+                        if r.name not in seen_names:
+                            seen_names.add(r.name)
+                            filtered.append(r)
+                    rule_classes = filtered
+
+                # Instantiate rules with the validation context object.
+                ctx = self.context
+                self.rules = [R(config, validation_context=ctx) for R in rule_classes]
         except Exception as e:
             logger.error(f"[ValidationRunner] Failed to initialize rules: {e}")
             raise
@@ -115,6 +146,13 @@ class ValidationRunner:
             return [self._makeSkippedResult(asset_path, "Asset is allowlisted")]
 
         for rule in self.rules:
+            if not rule.isEnabled():
+                logger.debug(
+                    "[ValidationRunner] Skipping disabled rule '%s' for asset '%s'.",
+                    getattr(rule, "name", type(rule).__name__),
+                    asset_path,
+                )
+                continue
             t0 = time.perf_counter()
             try:
                 result = rule.validate(asset_path)

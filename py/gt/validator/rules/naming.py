@@ -12,6 +12,8 @@ from __future__ import annotations
 import os
 import re
 
+from gt.runtime import HostType
+
 from ..registry import registry
 from .base import AbstractRule, Severity, ValidationResult
 
@@ -24,12 +26,14 @@ class NamingConventionRule(AbstractRule):
         name: Rule identifier ``"naming_convention"``.
         category: Rule category ``"naming"``.
         severity: :attr:`Severity.ERROR`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "naming_convention"
     category = "naming"
     severity = Severity.ERROR
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the naming convention for the given asset.
@@ -42,9 +46,19 @@ class NamingConventionRule(AbstractRule):
             the configured pattern.
 
         """
-        # For Unreal content paths (/Game/...), extract the asset name from the path.
-        # For filesystem paths, use the filename stem as before.
-        if asset_path.startswith("/Game/") or (
+        # Use context to collect metadata when available.
+        try:
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
+        except (AttributeError, TypeError):
+            meta = None
+
+        if meta is not None:
+            stem = meta.name or os.path.basename(asset_path).split('.')[0]
+        elif asset_path.startswith("/Game/") or (
             asset_path.startswith("/") and not os.path.exists(asset_path)
         ):
             # Unreal path — name is the last component (no extension)
@@ -77,12 +91,14 @@ class PrefixConventionRule(AbstractRule):
         name: Rule identifier ``"prefix_convention"``.
         category: Rule category ``"naming"``.
         severity: :attr:`Severity.ERROR`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "prefix_convention"
     category = "naming"
     severity = Severity.ERROR
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the prefix convention for the given asset.
@@ -95,45 +111,66 @@ class PrefixConventionRule(AbstractRule):
             prefix for its extension.
 
         """
-        # For Unreal content paths (/Game/...), extract the asset name from the path.
-        # For filesystem paths, use the filename stem as before.
-        if asset_path.startswith("/Game/") or (
+        # Use context to collect metadata when available.
+        try:
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
+        except (AttributeError, TypeError):
+            meta = None
+
+        # Compute `filename` unconditionally (used in messages below,
+        # regardless of which stem/ext branch runs) — previously this was
+        # only assigned in the filesystem-fallback branch, causing an
+        # UnboundLocalError whenever a context was supplied, which is the
+        # normal case in production (ValidationRunner always injects one).
+        filename = os.path.basename(asset_path)
+
+        if meta is not None:
+            stem = meta.name or ""
+            ext = meta.extension.lower()
+        elif asset_path.startswith("/Game/") or (
             asset_path.startswith("/") and not os.path.exists(asset_path)
         ):
             # Unreal path — name is the last component (no extension)
             stem = asset_path.rstrip('/').split('/')[-1]
+            ext = ""
         else:
-            filename = os.path.basename(asset_path)
             stem, ext = os.path.splitext(filename)
             ext = ext.lower()
 
-            # Only check prefix requirement if we have an extension (filesystem path)
-            required_prefixes: dict = self.config.get("required_prefixes", {})
-            for prefix, extensions in required_prefixes.items():
-                if ext in extensions:
-                    if not stem.startswith(prefix):
-                        return self._makeResult(
-                            asset_path,
-                            passed=False,
-                            message=(
-                                f"File '{filename}' with extension '{ext}' "
-                                f"must start with prefix '{prefix}'."
-                            ),
-                            fix_hint=f"Rename to '{prefix}{stem}{ext}'.",
-                        )
+        # Only check prefix requirement if we have an extension (filesystem path)
+        required_prefixes: dict = self.config.get("required_prefixes", {})
+        for prefix, extensions in required_prefixes.items():
+            if ext and ext in extensions:
+                if not stem.startswith(prefix):
                     return self._makeResult(
                         asset_path,
-                        passed=True,
-                        message=f"File '{filename}' has correct prefix '{prefix}'.",
+                        passed=False,
+                        message=(
+                            f"File '{filename}' with extension '{ext}' "
+                            f"must start with prefix '{prefix}'."
+                        ),
+                        fix_hint=f"Rename to '{prefix}{stem}{ext}'.",
                     )
+                return self._makeResult(
+                    asset_path,
+                    passed=True,
+                    message=f"File '{filename}' has correct prefix '{prefix}'.",
+                )
 
-            return self._makeResult(
-                asset_path,
-                passed=True,
-                message=f"No prefix rule configured for extension '{ext}' — skipped.",
-            )
+        if meta is not None:
+            # If we have metadata from context but no matching prefix rule, still pass
+            if stem:
+                return self._makeResult(
+                    asset_path,
+                    passed=True,
+                    message=f"No prefix rule configured for extension '{ext}' — skipped.",
+                )
 
-        # For Unreal paths, we can only check that the name exists;
+        # For Unreal paths without metadata, validate name exists;
         # extension validation happens via ValidExtensionRule elsewhere.
         if stem:
             return self._makeResult(
@@ -159,12 +196,14 @@ class FilenameLengthRule(AbstractRule):
         name: Rule identifier ``"filename_length"``.
         category: Rule category ``"naming"``.
         severity: :attr:`Severity.WARNING`.
+        context: Works on any host (STANDALONE).
 
     """
 
     name = "filename_length"
     category = "naming"
     severity = Severity.WARNING
+    context = HostType.STANDALONE
 
     def validate(self, asset_path: str) -> ValidationResult:
         """Validate the filename length for the given asset.
@@ -177,7 +216,24 @@ class FilenameLengthRule(AbstractRule):
             is within the configured limit.
 
         """
-        filename = os.path.basename(asset_path)
+        # Use context to collect metadata when available.
+        try:
+            meta = (
+                self._validation_context.collect(asset_path)
+                if self._validation_context is not None
+                else None
+            )
+        except (AttributeError, TypeError):
+            meta = None
+
+        if meta is not None:
+            # meta.name is a stem (no extension, matching UnrealContext's
+            # contract) — reconstruct the full filename for a length check
+            # that matches real on-disk filename length limits.
+            filename = (meta.name or "") + (meta.extension or "")
+        else:
+            filename = os.path.basename(asset_path)
+
         max_len: int = self.config.get("max_filename_length", 64)
 
         if len(filename) > max_len:

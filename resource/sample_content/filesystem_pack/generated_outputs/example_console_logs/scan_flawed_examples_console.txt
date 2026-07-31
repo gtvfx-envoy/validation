@@ -1,0 +1,7 @@
+[INFO] Scan root: flawed_examples/project_aurora
+[INFO] Files scanned: 31
+[ERROR] INVALID_NAME | characters/Knight Final/geo/KnightBody.fbx | File name does not match approved pattern
+[ERROR] FORBIDDEN_EXTENSION | characters/Knight Final/geo/chr_knight_sword_v001.max | Extension .max is not allowed
+[ERROR] EMPTY_FILE | characters/Knight Final/textures/empty_texture.png | File size is zero bytes
+[WARNING] BANNED_TERM | props/prp_lantern/geo/prp_lantern_final_final2.fbx | Name contains banned term: final
+[WARNING] FORBIDDEN_FOLDER | environments/env_forest_clearing/temp/test_export.fbx | Path contains forbidden folder: temp

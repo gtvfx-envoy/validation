@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..rules.base import Severity, ValidationResult
 from .models import ValidationReport
@@ -208,27 +208,34 @@ class ConsoleFormatter:
 
 
 class JSONFormatter:
-    """Machine-readable JSON report.
+    """Machine-readable JSON report formatter.
 
     Structure::
         {
-          "generated_at": "...",
-          "tool_version": "...",
-          "duration_ms": 0.0,
-          "asset_count": 0,
-          "rule_count": 0,
+          "metadata": {
+            "timestamp": "...",
+            "tool_version": "...",
+            "duration_ms": 0.0,
+            "host_type": "standalone" | "unreal" | ...
+          },
           "summary": {
             "status": "PASS",
-            "total": 0, "passed": 0, "failed": 0,
-            "errors": 0, "warnings": 0, "infos": 0, "skipped": 0
+            "total_assets": 0,
+            "total_results": 0,
+            "passed": 0, "failed": 0, "skipped": 0,
+            "errors": 0, "warnings": 0,
+            "categories": { ... }
           },
-
-          "results": [ { ... } ]
+          "results": { "category_name": [ { ... } ] }
         }
 
     Args:
         show_passing: Include passing results in the ``results`` array
             (default: ``False``).
+
+    Note:
+        This formatter is pure — it returns a string. File I/O is the caller's
+        responsibility (e.g. ``Path("report.json").write_text(formatter.format(report))``).
 
     """
 
@@ -243,41 +250,153 @@ class JSONFormatter:
         self.show_passing = show_passing
 
     def format(self, report: ValidationReport) -> str:
-        """Format *report* as a formatted JSON string.
+        """Format *report* as a JSON string.
 
         Args:
             report: The ValidationReport to format.
 
         Returns:
-            A UTF-8 JSON string, indented by 2 spaces.
+            A UTF-8 JSON string with 2-space indentation.
 
         """
-        results_data = [
-            self._resultToDict(r)
-            for r in report.results
-            if self.show_passing or not r.passed or r.skipped
-        ]
+        data = self._build_data(report)
+        return json.dumps(data, indent=2, ensure_ascii=False, default=str)
 
-        data = {
-            "generated_at": datetime.now().isoformat(),
-            "tool_version": report.tool_version,
-            "duration_ms": report.duration_ms,
-            "asset_count": report.asset_count,
-            "rule_count": report.rule_count,
-            "summary": {
-                "status": "FAIL" if report.hasErrors() else "PASS",
-                "total": report.total,
-                "passed": report.passed,
-                "failed": report.failed,
-                "errors": report.errors,
-                "warnings": report.warnings,
-                "infos": report.infos,
-                "skipped": report.skipped,
-            },
-            "results": results_data,
+    def _build_data(self, report: ValidationReport) -> dict:
+        """Build the JSON-serializable data structure from *report*.
+
+        Args:
+            report: The ValidationReport to serialize.
+
+        Returns:
+            A dictionary ready for ``json.dumps``.
+
+        """
+        # Metadata section
+        metadata: dict = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if hasattr(report, "tool_version") and report.tool_version:
+            metadata["tool_version"] = report.tool_version
+        if hasattr(report, "duration_ms"):
+            metadata["duration_ms"] = round(report.duration_ms, 1)
+
+        # Host type detection (best-effort)
+        try:
+            from gt.runtime import RuntimeDetector as _RuntimeDetector
+            host_type = _RuntimeDetector.getCurrentHost()
+            if host_type is not None:
+                metadata["host_type"] = host_type.value
+        except ImportError:
+            pass  # Standalone mode has no runtime info
+
+        # Summary statistics
+        summary = self._build_summary(report)
+
+        # Per-asset results grouped by category
+        per_asset: dict[str, list[dict]] = {}
+        for result in report.results:
+            if not self.show_passing and result.passed and not result.skipped:
+                continue
+            category = getattr(result, "category", "") or "uncategorized"
+            per_asset.setdefault(category, []).append(self._result_to_dict(result))
+
+        return {
+            "metadata": metadata,
+            "summary": summary,
+            "results": per_asset,
         }
 
-        return json.dumps(data, indent=2, default=str)
+    def _build_summary(self, report: ValidationReport) -> dict:
+        """Build summary statistics from a validation report.
+
+        Args:
+            report: The :class:`ValidationReport` containing results.
+
+        Returns:
+            A dictionary with summary counts by category and severity.
+
+        """
+        total = len(report.results)
+        passed = report.passed
+        failed = report.failed
+        skipped = report.skipped
+        errors = report.errors
+        warnings = report.warnings
+
+        # Summary by category
+        categories: dict[str, dict] = {}
+        for result in report.results:
+            cat = getattr(result, "category", "") or "uncategorized"
+            if cat not in categories:
+                categories[cat] = {
+                    "total": 0,
+                    "passed": 0,
+                    "failed": 0,
+                    "skipped": 0,
+                    "errors": 0,
+                    "warnings": 0,
+                }
+            categories[cat]["total"] += 1
+            if result.passed and not result.skipped:
+                categories[cat]["passed"] += 1
+            elif not result.passed and not result.skipped:
+                categories[cat]["failed"] += 1
+            else:
+                categories[cat]["skipped"] += 1
+
+        # Count severities per category for failed results
+        for result in report.failures():
+            cat = getattr(result, "category", "") or "uncategorized"
+            if cat not in categories:
+                categories.setdefault(cat, {"total": 0})
+                categories[cat]["failed"] = 0
+
+        # Build summary dict with counts by category and severity
+        summary: dict = {
+            "status": "FAIL" if report.hasErrors() else "PASS",
+            "total_assets": report.asset_count,
+            "total_results": total,
+            "passed": passed,
+            "failed": failed,
+            "skipped": skipped,
+            "errors": errors,
+            "warnings": warnings,
+            "categories": categories,
+        }
+
+        # Assets with failures grouped by asset path
+        assets_with_failures = report.assetsWithFailures()
+        if assets_with_failures:
+            summary["assets_with_failures"] = {
+                path: len(results) for path, results in assets_with_failures.items()
+            }
+
+        return summary
+
+    @staticmethod
+    def _result_to_dict(r) -> dict:
+        """Convert a single :class:`ValidationResult` to a JSON-compatible dict.
+
+        Args:
+            r: A :class:`~validator.rules.base.ValidationResult` instance.
+
+        Returns:
+            A dictionary representation of the result suitable for JSON export.
+
+        """
+        return {
+            "asset_path": getattr(r, "asset_path", ""),
+            "rule_name": getattr(r, "rule_name", ""),
+            "category": getattr(r, "category", ""),
+            "severity": getattr(r, "severity", None).value if r.severity else "",
+            "passed": getattr(r, "passed", False),
+            "skipped": getattr(r, "skipped", False),
+            "message": getattr(r, "message", ""),
+            "fix_hint": getattr(r, "fix_hint", ""),
+            "timestamp": getattr(r, "timestamp", ""),
+            "duration_ms": round(getattr(r, "duration_ms", 0.0), 1),
+        }
 
     @staticmethod
     def _resultToDict(r: ValidationResult) -> dict:
@@ -587,3 +706,346 @@ class HTMLFormatter:
     /* Footer */
     footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #30363d;
              font-size: 0.8rem; color: #8b949e; text-align: center; }"""
+
+
+class SARIFFormatter:
+    """SARIF (Static Analysis Results Interchange Format) v2.1.0 report formatter.
+
+    Produces an OASIS-standard SARIF JSON document suitable for ingestion by
+    GitHub Code Scanning, Azure DevOps, and other SARIF-compatible consumers.
+
+    Structure::
+        {
+          "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/SARIF-JSON/schema/v2.1.0/sarif-schema-2.1.0.json",
+          "version": "2.1.0",
+          "runs": [{
+            "tool": { "driver": { "name": "GT Asset Validator", "version": "..." } },
+            "results": [
+              {
+                "ruleId": "...",
+                "level": "error|warning|none",
+                "message": { "text": "..." },
+                "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "..." } } }]
+              }
+            ]
+          }]
+        }
+
+    Args:
+        show_passing: Include passing results in the output (default: ``False``).
+
+    Note:
+        SARIF maps ``Severity.ERROR`` to ``level: error``, ``Severity.WARNING``
+        to ``level: warning``, and everything else (including passes) to
+        ``level: none``.  Skipped results are omitted entirely.
+
+    """
+
+    _SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/SARIF-JSON/schema/v2.1.0/sarif-schema-2.1.0.json"
+    _TOOL_NAME = "GT Asset Validator"
+
+    def __init__(self, show_passing: bool = False) -> None:
+        """Initialise the SARIF formatter.
+
+        Args:
+            show_passing: Include passing results in the output
+                (default: ``False``).
+
+        """
+        self.show_passing = show_passing
+
+    def format(self, report: ValidationReport) -> str:
+        """Format *report* as a SARIF v2.1.0 JSON string.
+
+        Args:
+            report: The ValidationReport to format.
+
+        Returns:
+            A UTF-8 JSON string conforming to the SARIF v2.1.0 schema.
+
+        """
+        sarif: dict = {
+            "$schema": self._SARIF_SCHEMA,
+            "version": "2.1.0",
+            "runs": [self._build_run(report)],
+        }
+        return json.dumps(sarif, indent=2, ensure_ascii=False)
+
+    def _build_run(self, report: ValidationReport) -> dict:
+        """Build a single SARIF ``run`` object from *report*.
+
+        Args:
+            report: The ValidationReport to convert.
+
+        Returns:
+            A dict representing one SARIF run.
+
+        """
+        # Attempt host-type detection for the tool environment
+        env_info: dict[str, str] = {}
+        try:
+            from gt.runtime import RuntimeDetector as _RuntimeDetector
+
+            host_type = _RuntimeDetector.getCurrentHost()
+            if host_type is not None:
+                env_info["host"] = host_type.value
+        except ImportError:
+            pass
+
+        run: dict = {
+            "tool": {
+                "driver": {
+                    "name": self._TOOL_NAME,
+                    "version": report.tool_version or "unknown",
+                    "informationUri": "https://github.com/gtvfx-contrib/gt-validation",
+                    "rules": self._build_rules(report),
+                }
+            },
+            "results": self._build_results(report),
+        }
+        if env_info:
+            run["invocations"] = [
+                {
+                    "executionSuccessful": True,
+                    "environment": {"variables": env_info},
+                }
+            ]
+        return run
+
+    def _build_rules(self, report: ValidationReport) -> list[dict]:
+        """Build the ``tool.driver.rules`` array — one entry per unique rule.
+
+        Args:
+            report: The ValidationReport to scan for rule metadata.
+
+        Returns:
+            A list of SARIF rule objects with shortDescription only.
+
+        """
+        seen: set[str] = set()
+        rules: list[dict] = []
+        for r in report.results:
+            if r.rule_name in seen or not r.category:
+                continue
+            seen.add(r.rule_name)
+            rules.append(
+                {
+                    "id": r.rule_name,
+                    "shortDescription": {"text": r.rule_name},
+                    "defaultConfiguration": {
+                        "level": self._severity_to_level(r.severity),
+                    },
+                }
+            )
+        return rules
+
+    def _build_results(self, report: ValidationReport) -> list[dict]:
+        """Build the ``results`` array from *report*.
+
+        Args:
+            report: The ValidationReport to convert.
+
+        Returns:
+            A list of SARIF result objects.
+
+        """
+        results: list[dict] = []
+        for r in report.results:
+            if r.skipped:
+                continue
+            if not self.show_passing and r.passed:
+                continue
+            level = "none" if r.passed else self._severity_to_level(r.severity)
+            message_text = r.message or f"{r.rule_name} check completed."
+            if r.fix_hint and not r.passed:
+                message_text += f" Fix hint: {r.fix_hint}"
+
+            result: dict = {
+                "ruleId": r.rule_name,
+                "level": level,
+                "message": {"text": message_text},
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": self._sanitize_uri(r.asset_path)},
+                        }
+                    }
+                ],
+            }
+            if r.duration_ms > 0:
+                result["properties"] = {"durationMs": round(r.duration_ms, 2)}
+            results.append(result)
+        return results
+
+    @staticmethod
+    def _severity_to_level(severity: Severity) -> str:
+        """Map a :class:`~validator.rules.base.Severity` to a SARIF ``level`` string.
+
+        Args:
+            severity: The severity to map.
+
+        Returns:
+            One of ``"error"``, ``"warning"``, or ``"none"``.
+
+        """
+        if severity == Severity.ERROR:
+            return "error"
+        if severity == Severity.WARNING:
+            return "warning"
+        return "none"
+
+    @staticmethod
+    def _sanitize_uri(path: str) -> str:
+        """Sanitize a filesystem path for use as a SARIF ``artifactLocation.uri``.
+
+        SARIF URIs should be forward-slashed and free of characters that break
+        URI parsing.  On Windows we normalise backslashes to forward slashes.
+
+        Args:
+            path: The raw asset path.
+
+        Returns:
+            A forward-slashed, URI-safe path string.
+
+        """
+        return path.replace("\\", "/")
+
+
+class JUnitXMLFormatter:
+    """JUnit XML report formatter.
+
+    Produces a JUnit-compatible XML document suitable for CI systems such as
+    Jenkins, GitHub Actions, Azure DevOps, and GitLab CI/CD.
+
+    Structure::
+        <?xml version="1.0" encoding="UTF-8"?>
+        <testsuites>
+          <testsuite name="asset_validation" tests="N" failures="F" errors="E" skipped="S" time="T">
+            <testcase classname="category.rule_name" name="asset_path" time="T">
+              <failure message="..." type="ERROR"/>  (optional)
+            </testcase>
+          </testsuite>
+        </testsuites>
+
+    Each validation result becomes a ``<testcase>`` element.  Failed results
+    include a ``<failure>`` child; skipped results are recorded in the
+    ``skipped`` attribute of the root element.
+
+    Args:
+        show_passing: Include passing test cases in the output (default:
+            ``False``).
+
+    """
+
+    def __init__(self, show_passing: bool = False) -> None:
+        """Initialise the JUnit XML formatter.
+
+        Args:
+            show_passing: Include passing test cases in the output
+                (default: ``False``).
+
+        """
+        self.show_passing = show_passing
+
+    def format(self, report: ValidationReport) -> str:
+        """Format *report* as a JUnit XML string.
+
+        Args:
+            report: The ValidationReport to format.
+
+        Returns:
+            A UTF-8 XML string in JUnit format.
+
+        """
+        total = len(report.results)
+        failures = report.failed
+        errors = report.errors
+        skipped = report.skipped
+        total_time = round(report.duration_ms / 1000.0, 4)
+
+        # Group results by category for test suite organization
+        suites = self._build_suites(report)
+
+        parts: list[str] = ['<?xml version="1.0" encoding="UTF-8"?>']
+        parts.append(
+            f'<testsuites tests="{total}" failures="{failures + errors}" '
+            f'errors="{errors}" skipped="{skipped}" time="{total_time}">'
+        )
+
+        for suite_name, suite_results in suites.items():
+            suite_failures = sum(1 for r in suite_results if not r.passed and not r.skipped)
+            suite_errors = sum(
+                1 for r in suite_results
+                if not r.passed and not r.skipped and r.severity == Severity.ERROR
+            )
+            suite_skipped = sum(1 for r in suite_results if r.skipped)
+            suite_time = round(sum(r.duration_ms for r in suite_results) / 1000.0, 4)
+
+            parts.append(
+                f'  <testsuite name="{self._xml_escape(suite_name)}" '
+                f'tests="{len(suite_results)}" failures="{suite_failures}" '
+                f'errors="{suite_errors}" skipped="{suite_skipped}" time="{suite_time}">'
+            )
+
+            for r in suite_results:
+                if not self.show_passing and r.passed and not r.skipped:
+                    continue
+                classname = f"{r.category}.{r.rule_name}" if r.category else r.rule_name
+                name = self._xml_escape(r.asset_path)
+                parts.append(
+                    f'    <testcase classname="{self._xml_escape(classname)}" '
+                    f'name="{name}" time="{round(r.duration_ms / 1000.0, 4)}">'
+                )
+                if r.skipped:
+                    parts.append(f'      <skipped message="{self._xml_escape(r.message)}"/>')
+                elif not r.passed and r.severity == Severity.ERROR:
+                    parts.append(
+                        f'      <failure message="{self._xml_escape(r.message)}" '
+                        f'type="ERROR">{self._xml_escape(r.fix_hint or "")}</failure>'
+                    )
+                elif not r.passed:
+                    parts.append(
+                        f'      <failure message="{self._xml_escape(r.message)}" '
+                        f'type="FAILURE">{self._xml_escape(r.fix_hint or "")}</failure>'
+                    )
+                parts.append("    </testcase>")
+
+            parts.append("  </testsuite>")
+
+        parts.append("</testsuites>")
+        return "\n".join(parts)
+
+    def _build_suites(self, report: ValidationReport) -> dict[str, list[ValidationResult]]:
+        """Group results by category for JUnit test suite organization.
+
+        Args:
+            report: The ValidationReport to group.
+
+        Returns:
+            A dict mapping category name to list of results.
+
+        """
+        suites: dict[str, list[ValidationResult]] = {}
+        for r in report.results:
+            cat = r.category or "uncategorized"
+            suites.setdefault(cat, []).append(r)
+        return suites
+
+    @staticmethod
+    def _xml_escape(text: str) -> str:
+        """Escape special XML characters in *text*.
+
+        Args:
+            text: The string to escape.
+
+        Returns:
+            The escaped string safe for inclusion in XML attributes.
+
+        """
+        return (
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&apos;")
+        )
