@@ -13,9 +13,6 @@ jobs:
   pytest:
     name: Pytest (envoy Python 3.11)
     runs-on: ["self-hosted", "Linux", "X64", "debian-13", "ci"]
-    defaults:
-      run:
-        shell: pwsh
     env:
       ENVOY_STACK: ""
       ENVOY_STACK_CONTEXT: ""
@@ -37,58 +34,85 @@ jobs:
           path: .ci/globals
 
       - name: Bootstrap isolated Envoy runtime
-        run: |
-          $ErrorActionPreference = "Stop"
-          $PSNativeCommandUseErrorActionPreference = $true
-          $release = "v0.6.2"
-          $root = Join-Path $env:RUNNER_TEMP "validation-envoy-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          New-Item -ItemType Directory -Path $root -Force | Out-Null
-          $archive_name = "envoy-$release-linux-x86_64-musl.tar.gz"
-          $archive = Join-Path $root $archive_name
-          $release_url = "https://github.com/gtvfx-envoy/envoy/releases/download/$release"
-          Invoke-WebRequest "$release_url/$archive_name" -OutFile $archive
-          $checksums = (Invoke-WebRequest "$release_url/SHA256SUMS").Content
-          $pattern = "(?m)^([0-9a-fA-F]{64})\s+\*?$([Regex]::Escape($archive_name))\r?$"
-          $checksum = [Regex]::Match($checksums, $pattern)
-          if (-not $checksum.Success) {
-            throw "Missing checksum for $archive_name"
-          }
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $checksum.Groups[1].Value) {
-            throw "Checksum mismatch for $archive_name"
-          }
-          tar -xzf $archive -C $root
-
-          $bin = Join-Path $root "gt\envoy\$release\bin"
-          $envoy = Join-Path $bin "envoy"
-          $site_packages = Join-Path $root "site-packages"
-          $commands_file = Join-Path $root "commands.json"
-          $commands = Get-Content .envoy\commands.json -Raw | ConvertFrom-Json -AsHashtable
-          $commands.python = @{
-            alias = @((Get-Command python).Source)
-            environment = @("python_env.json")
-          }
-          $commands.validate.environment = @("python_env.json")
-          $commands | ConvertTo-Json -Depth 10 | Set-Content $commands_file -Encoding utf8NoBOM
-          @{
-            environment = @{
-              PYTHONNOUSERSITE = "1"
-              PYTHONPATH = @(
-                (Resolve-Path py).Path
-                (Resolve-Path .ci\globals\py).Path
-                $site_packages
-              ) -join [IO.Path]::PathSeparator
-              PATH = "$bin$([IO.Path]::PathSeparator)$env:PATH"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const crypto = require("node:crypto");
+            const { execFileSync } = require("node:child_process");
+            const release = "v0.6.2";
+            const workspace = process.env.GITHUB_WORKSPACE;
+            const root = path.join(
+              process.env.RUNNER_TEMP,
+              `validation-envoy-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`
+            );
+            fs.mkdirSync(root, { recursive: true });
+            const archiveName = `envoy-${release}-linux-x86_64-musl.tar.gz`;
+            const releaseURL = `https://github.com/gtvfx-envoy/envoy/releases/download/${release}`;
+            async function download(asset) {
+              const response = await fetch(`${releaseURL}/${asset}`);
+              if (!response.ok) {
+                throw new Error(`Downloading ${asset} failed: ${response.status}`);
+              }
+              return Buffer.from(await response.arrayBuffer());
             }
-          } | ConvertTo-Json -Depth 10 |
-            Set-Content (Join-Path $root "python_env.json") -Encoding utf8NoBOM
-          "ENVOY_COMMANDS_FILE=$commands_file" | Add-Content $env:GITHUB_ENV
-          $bin | Add-Content $env:GITHUB_PATH
-          & $envoy --ignore-config --inherit-env --commands-file $commands_file python -m pip install --target $site_packages '.[dev]'
-          & $envoy --ignore-config --inherit-env --commands-file $commands_file python -c "import gt.runtime, gt.validator, pytest; print(gt.runtime.__file__); print(gt.validator.__file__)"
+            const [archiveBytes, checksumBytes] = await Promise.all([
+              download(archiveName), download("SHA256SUMS")
+            ]);
+            const checksums = checksumBytes.toString("utf8").trim().split(/\r?\n/)
+              .map(line => line.trim().split(/\s+/))
+              .filter(parts => parts[1]?.replace(/^\*/, "") === archiveName);
+            if (checksums.length !== 1) {
+              throw new Error(`Expected one checksum for ${archiveName}`);
+            }
+            const actualHash = crypto.createHash("sha256").update(archiveBytes).digest("hex");
+            if (actualHash !== checksums[0][0].toLowerCase()) {
+              throw new Error(`Checksum mismatch for ${archiveName}`);
+            }
+            const archive = path.join(root, archiveName);
+            fs.writeFileSync(archive, archiveBytes);
+            execFileSync("tar", ["-xzf", archive, "-C", root], { stdio: "inherit" });
+
+            const bin = path.join(root, "gt", "envoy", release, "bin");
+            const envoy = path.join(bin, "envoy");
+            const sitePackages = path.join(root, "site-packages");
+            const commandsFile = path.join(root, "commands.json");
+            const commands = JSON.parse(
+              fs.readFileSync(path.join(workspace, ".envoy", "commands.json"), "utf8")
+            );
+            commands.python = {
+              alias: [path.join(process.env.pythonLocation, "bin", "python")],
+              environment: ["python_env.json"]
+            };
+            commands.validate.environment = ["python_env.json"];
+            fs.writeFileSync(commandsFile, JSON.stringify(commands));
+            fs.writeFileSync(path.join(root, "python_env.json"), JSON.stringify({
+              environment: {
+                PYTHONNOUSERSITE: "1",
+                PYTHONPATH: [
+                  path.join(workspace, "py"),
+                  path.join(workspace, ".ci", "globals", "py"),
+                  sitePackages
+                ].join(path.delimiter),
+                PATH: [bin, process.env.PATH].join(path.delimiter)
+              }
+            }));
+            core.exportVariable("ENVOY_COMMANDS_FILE", commandsFile);
+            core.addPath(bin);
+            const pythonArgs = [
+              "--ignore-config", "--inherit-env", "--commands-file", commandsFile, "python"
+            ];
+            execFileSync(envoy, [
+              ...pythonArgs, "-m", "pip", "install", "--target", sitePackages, ".[dev]"
+            ], { stdio: "inherit" });
+            execFileSync(envoy, [
+              ...pythonArgs, "-c",
+              "import gt.runtime, gt.validator, pytest; print(gt.runtime.__file__); print(gt.validator.__file__)"
+            ], { stdio: "inherit" });
 
       - name: Run pytest via envoy Python
-        run: |
-          envoy --ignore-config --inherit-env --commands-file $env:ENVOY_COMMANDS_FILE python -m pytest py -v --tb=short
+        run: envoy --ignore-config --inherit-env python -m pytest py -v --tb=short
 
       - name: Upload test results on failure
         if: failure()
