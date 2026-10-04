@@ -127,9 +127,11 @@ class TestCLISmokeIntegration:
         sample_directory: Path,
     ) -> None:
         """Verify a nonexistent directory returns a configuration error."""
-        result = validate("--directory", str(sample_directory / "missing"))
+        missing_directory = str(sample_directory / "missing")
+        result = validate("--directory", missing_directory)
         assert result.returncode == 2
-        assert "Not a valid directory" in result.stderr
+        assert "[CLI] ERROR:" in result.stderr
+        assert missing_directory in result.stderr
 
     def testExitCode(self, validate: ValidationCommand, sample_directory: Path) -> None:
         """Verify validation errors return a failing exit code."""
