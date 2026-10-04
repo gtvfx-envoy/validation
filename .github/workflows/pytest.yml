@@ -12,49 +12,114 @@ permissions:
 jobs:
   pytest:
     name: Pytest (envoy Python 3.11)
-    runs-on: ["self-hosted", "Linux", "X64"]
+    runs-on: ["self-hosted", "Linux", "X64", "debian-13", "ci"]
+    env:
+      ENVOY_STACK: ""
+      ENVOY_STACK_CONTEXT: ""
+      ENVOY_BNDL_ROOTS: ""
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11 (envoy runtime)
+      - name: Set up Python 3.11.9 (envoy runtime)
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.11.9'
 
-      - name: Install gt-envoy CLI
-        run: |
-          pip install --upgrade pip
-          # Install gt-envoy from the gtvfx-contrib organization
-          pip install git+https://github.com/gtvfx-contrib/gt-envoy.git@main
+      - name: Checkout gt.globals source Bundle
+        uses: actions/checkout@v4
+        with:
+          repository: gtvfx-envoy/globals
+          path: .ci/globals
 
-      - name: Bootstrap gt.globals bundle (provides runtime dependencies)
-        working-directory: ${{ github.workspace }}
-        run: |
-          # Clone and install gt.globals to get the full runtime environment
-          git clone --depth 1 https://github.com/gtvfx-contrib/gt-globals.git /tmp/gt-globals
-          cd /tmp/gt-globals/py
-          pip install -e .
+      - name: Bootstrap isolated Envoy runtime
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const crypto = require("node:crypto");
+            const { execFileSync } = require("node:child_process");
+            const release = "v0.6.2";
+            const workspace = process.env.GITHUB_WORKSPACE;
+            const root = path.join(
+              process.env.RUNNER_TEMP,
+              `validation-envoy-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`
+            );
+            fs.mkdirSync(root, { recursive: true });
+            const archiveName = `envoy-${release}-linux-x86_64-musl.tar.gz`;
+            const releaseURL = `https://github.com/gtvfx-envoy/envoy/releases/download/${release}`;
+            async function download(asset) {
+              const response = await fetch(`${releaseURL}/${asset}`);
+              if (!response.ok) {
+                throw new Error(`Downloading ${asset} failed: ${response.status}`);
+              }
+              return Buffer.from(await response.arrayBuffer());
+            }
+            const [archiveBytes, checksumBytes] = await Promise.all([
+              download(archiveName), download("SHA256SUMS")
+            ]);
+            const checksums = checksumBytes.toString("utf8").trim().split(/\r?\n/)
+              .map(line => line.trim().split(/\s+/))
+              .filter(parts => parts[1]?.replace(/^\*/, "") === archiveName);
+            if (checksums.length !== 1) {
+              throw new Error(`Expected one checksum for ${archiveName}`);
+            }
+            const actualHash = crypto.createHash("sha256").update(archiveBytes).digest("hex");
+            if (actualHash !== checksums[0][0].toLowerCase()) {
+              throw new Error(`Checksum mismatch for ${archiveName}`);
+            }
+            const archive = path.join(root, archiveName);
+            fs.writeFileSync(archive, archiveBytes);
+            execFileSync("tar", ["-xzf", archive, "-C", root], { stdio: "inherit" });
 
-      - name: Install gt-validation with dev extras
-        working-directory: ${{ github.workspace }}/py
-        run: |
-          pip install --upgrade pip
-          pip install -e ..[dev]
+            const bin = path.join(root, "gt", "envoy", release, "bin");
+            const envoy = path.join(bin, "envoy");
+            const sitePackages = path.join(root, "site-packages");
+            const commandsFile = path.join(root, "commands.json");
+            const commands = JSON.parse(
+              fs.readFileSync(path.join(workspace, ".envoy", "commands.json"), "utf8")
+            );
+            commands.python = {
+              alias: [path.join(process.env.pythonLocation, "bin", "python")],
+              environment: ["python_env.json"]
+            };
+            commands.validate.environment = ["python_env.json"];
+            fs.writeFileSync(commandsFile, JSON.stringify(commands));
+            fs.writeFileSync(path.join(root, "python_env.json"), JSON.stringify({
+              environment: {
+                PYTHONNOUSERSITE: "1",
+                PYTHONPATH: [
+                  path.join(workspace, "py"),
+                  path.join(workspace, ".ci", "globals", "py"),
+                  sitePackages
+                ].join(path.delimiter),
+                PATH: [bin, process.env.PATH].join(path.delimiter)
+              }
+            }));
+            core.exportVariable("ENVOY_COMMANDS_FILE", commandsFile);
+            core.addPath(bin);
+            const pythonArgs = [
+              "--ignore-config", "--inherit-env", "--commands-file", commandsFile, "python"
+            ];
+            execFileSync(envoy, [
+              ...pythonArgs, "-m", "pip", "install", "--target", sitePackages, ".[dev]"
+            ], { stdio: "inherit" });
+            execFileSync(envoy, [
+              ...pythonArgs, "-c",
+              "import gt.runtime, gt.validator, pytest; print(gt.runtime.__file__); print(gt.validator.__file__)"
+            ], { stdio: "inherit" });
 
       - name: Run pytest via envoy Python
-        working-directory: ${{ github.workspace }}
-        run: |
-          # Use `en python` to ensure the full envoy-resolved Python 3.11 environment is used
-          # This provides gt.runtime, gt.krita (if available), and all bundle dependencies
-          en python -m pytest py/ -v --tb=short
+        run: envoy --ignore-config --inherit-env python -m pytest py -v --tb=short
 
       - name: Upload test results on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: pytest-results-${{ github.sha }}
+          include-hidden-files: true
           path: |
             **/.pytest_cache/v/cache/lastfailed
             **/.pytest_cache/v/cache/nodeids

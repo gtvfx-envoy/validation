@@ -19,6 +19,20 @@ report = runner.runAndReport("/path/to/assets")
 print(report.summaryLine())
 ```
 
+## Development and CI
+
+Run `en python -m pytest py` in the Envoy development environment. The `dev`
+extra includes pytest and pins Ruff to keep local and CI checks consistent.
+Lint checks are read-only; apply fixes locally before pushing.
+
+Debian CI uses the runner's cached Python 3.11.9. Tests run through the pinned
+Envoy v0.6.2 native release with a temporary command environment that combines
+this checkout, the `gt.globals` source Bundle (which provides `gt.runtime`), and
+job-local development dependencies. It does not install `gt.globals` as a
+Python project or depend on the runner's personal Envoy configuration.
+CLI smoke tests create temporary sample assets rather than requiring external
+content or workstation-specific paths.
+
 ## Documentation
 
 | Topic | Description |

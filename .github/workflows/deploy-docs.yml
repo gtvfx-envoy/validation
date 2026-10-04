@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build:
     name: Build ProperDocs site
-    runs-on: ["self-hosted", "Linux", "X64"]
+    runs-on: ["self-hosted", "Linux", "X64", "debian-13", "ci"]
 
     steps:
       - name: Checkout
@@ -26,10 +26,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.11.9
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.11.9'
 
       - name: Install gt-validation with docs extras
         working-directory: ${{ github.workspace }}/py
@@ -53,7 +53,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ["self-hosted", "Linux", "X64"]
+    runs-on: ["self-hosted", "Linux", "X64", "debian-13", "ci"]
     needs: build
 
     steps:

@@ -12,7 +12,8 @@ license = { file = "LICENSE" }
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.8",
+    "pytest>=8",
+    "ruff==0.15.22",
 ]
 docs = [
     "properdocs",
@@ -65,3 +66,8 @@ convention = "google"
 
 [tool.ruff.format]
 quote-style = "preserve"
+
+[tool.pytest.ini_options]
+markers = [
+    "cli_smoke: end-to-end validation CLI tests through Envoy",
+]
